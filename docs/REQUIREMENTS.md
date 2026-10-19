@@ -8,6 +8,7 @@
 ## F1. Dashboard
 
 **Role:** the GUI is the primary control surface per plan Phase 3.
+
 - Entities exercised: `Gate`, `GateSession`, `AccessDecision`, `SafetyDevice`, `Fault`, `Camera`, `Detection` (read paths), `AuditRecord` (export).
 - Acceptance criteria:
   - AC-F1.1 The dashboard uses only the operating-mode enum (`SIMULATED | UNCONFIGURED | LIVE`) from `DOMAIN.md` §0; it does not render an actuation state or device health conflated with mode.
@@ -41,14 +42,14 @@ Two inbound flows: (a) dashboard operator controls, (b) guest credential journey
 
 ## F5. Site-management layer (minimal admin surface)
 
-- AC-F5.1 Record a site, gates (with provisional type `sliding`), credentials, and camera inventory *before* hardware; this happens in the config path only, not via screen screens (screens consume config).
+- AC-F5.1 Record a site, gates (with provisional type `sliding`), credentials, and camera inventory _before_ hardware; this happens in the config path only, not via screen screens (screens consume config).
 - AC-F5.2 Faults raised in `Fault` are queryable in the dashboard with filters by kind/severity/date across `simulated`/`live`/`imported` `source` values.
 - AC-F5.3 The dashboard never renders an unconfigured device's data as live telemetry (C5 enforcement reachable to users: `mode` drives the visual badge).
 - AC-F5.4 Deletion semantics: no destructive deletion of audit-linked entities (D2); only `SUSPENDED`/`REVOKED`/lifecycle states plus correction rows.
 
 ## F6. Multi-user access (dashboard)
 
-- AC-F6.1 Operators with `role='OPERATOR'` see all dashboards/pages except: maintenance/config creation, raw audit export, credential issuing; these are `ADMIN`-gated at the route level, with the same Gatehead-focused audit trail for any *revisions*.
+- AC-F6.1 Operators with `role='OPERATOR'` see all dashboards/pages except: maintenance/config creation, raw audit export, credential issuing; these are `ADMIN`-gated at the route level, with the same Gatehead-focused audit trail for any _revisions_.
 - AC-F6.2 Guest paths never touch dashboard features; the visitor-PIN endpoint returns only a minimal result structure (no entity names, no timestamps of other sessions).
 - AC-F6.3 A dashboard user sees personal data (plates, snapshots) only when they are authorized to see real access data (a role field — deferred exactly how until P4's specific screen design, so P0 does not freeze a UI detail it cannot yet test).
 
@@ -71,6 +72,7 @@ Two inbound flows: (a) dashboard operator controls, (b) guest credential journey
 `dashboard / gate-operation APIs (4)/ access-control / camera-integration / site-management / multi-user-access / fault-handling` — all mapped above to at least one feature acceptance-criterion group. Features cover the plan's II list: each named feature has its own AC-group with entity/contract coverage.
 
 **Deferred-with-reason (not silently dropped):**
+
 - Telegrambot/WhatsAppbot delivery/notification surfaces: no claim; revisit when hardware commissioning tells us what notification targets are meaningful.
 - Scheduled TOCTOU-like sensor checks: the safety freshness rule (Amd 2.1) covers modeled dispatch-time behavior; anything beyond it is an explicit P5/P6 engineering item.
 - Multi-gate site rules (per-gate vs site-wide actuation): site is a container in P0 with one gate; behavior for N>1 gates is out of scope until a second gate exists (C4-adjacent honesty).

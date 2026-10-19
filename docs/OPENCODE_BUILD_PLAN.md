@@ -3,6 +3,7 @@
 **Status:** Source of truth. Rev 2.2. Replaces all prior ad-hoc task lists.
 
 **Amendment log:**
+
 - **Amd 2.1** (owner-approved): clarified C5 to an explicit operating-mode enum (`SIMULATED | UNCONFIGURED | LIVE`) with health/connectivity/configuration/safety as separate dimensions; refined the D5 hold-to-confirm requirement to show safety-device freshness and reject stale/unknown status; defined dependency-budget accounting (direct production deps count, transitive reported, budget must not force risky custom code). No D-decision replaced.
 - **Amd 2.2** (owner-approved, P0 review 2026-10-19): rewrote D3 rule 3 to remove Gatehead's policy authority (see below). Original rule 3 wording, preserved for decision history: "No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead, and Gatehead alone decides whether to consult the access-control service before acting." The strict rule that all device traffic flows through Gatehead remains; only the dependency direction changes — policy and authorization live entirely in the Actuation Coordinator, which depends on both the access-control service and Gatehead, so Gatehead can never become a second policy authority or induce a circular dependency. Recorded with the F-02 finding resolution in `docs/DECISIONS.md`.
 
@@ -14,20 +15,20 @@ Build a premium, local-first smart gate management platform. No physical hardwar
 
 These bind every phase and every prompt issued to OpenCode. A phase that violates any of them must be rejected in review.
 
-| # | Constraint | Meaning |
-|---|------------|---------|
-| C1 | Local-first | Everything runs on the installer's own machine. No mandatory SaaS, no cloud accounts, no telemetry leaving the site by default. |
-| C2 | Reproducible local setup | The project runs from the repository with documented commands (`install`, `dev`, `test`, `lint`). Model files and other large async assets may be staged separately, but the pipeline must define exactly how. |
-| C3 | Offline after staging | After dependencies and AI models are staged locally, the product must operate with the network cable unplugged except for LAN integrations. Offline is a *claim until proven* — no artifact may state it until Phase 6 verifies it with actual network-disabling tests. |
-| C4 | No invented compatibility | No file, prompt, changelog, or commit message may claim support for a specific gate operator, camera, or board that was not verified against real hardware or a documented interface specification. |
-| C5 | Never misrepresent state | Every adapter operates in exactly one explicit operating mode `SIMULATED \| UNCONFIGURED \| LIVE`, represented as a discriminated union (or equivalent invariant that makes contradictory combinations structurally impossible), with a persistent visual indicator in the GUI. Operating mode is one dimension only: health, connectivity, configuration validity, and safety-device status are separate modeled dimensions and must never be compressed into the mode enum — a LIVE adapter can be disconnected; a configured adapter can be unhealthy. |
-| C6 | Small reviewable changes | One phase, one review checkpoint, human sign-off before the next phase begins. |
+| #   | Constraint                | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | Local-first               | Everything runs on the installer's own machine. No mandatory SaaS, no cloud accounts, no telemetry leaving the site by default.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| C2  | Reproducible local setup  | The project runs from the repository with documented commands (`install`, `dev`, `test`, `lint`). Model files and other large async assets may be staged separately, but the pipeline must define exactly how.                                                                                                                                                                                                                                                                                                                                            |
+| C3  | Offline after staging     | After dependencies and AI models are staged locally, the product must operate with the network cable unplugged except for LAN integrations. Offline is a _claim until proven_ — no artifact may state it until Phase 6 verifies it with actual network-disabling tests.                                                                                                                                                                                                                                                                                   |
+| C4  | No invented compatibility | No file, prompt, changelog, or commit message may claim support for a specific gate operator, camera, or board that was not verified against real hardware or a documented interface specification.                                                                                                                                                                                                                                                                                                                                                       |
+| C5  | Never misrepresent state  | Every adapter operates in exactly one explicit operating mode `SIMULATED \| UNCONFIGURED \| LIVE`, represented as a discriminated union (or equivalent invariant that makes contradictory combinations structurally impossible), with a persistent visual indicator in the GUI. Operating mode is one dimension only: health, connectivity, configuration validity, and safety-device status are separate modeled dimensions and must never be compressed into the mode enum — a LIVE adapter can be disconnected; a configured adapter can be unhealthy. |
+| C6  | Small reviewable changes  | One phase, one review checkpoint, human sign-off before the next phase begins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ---
 
 ## The five architecture decisions (decided now, not later)
 
-Agents drift to their favorite framework and re-architect per feature. The following decisions are made up front and OpenCode must implement *against* them, not around them.
+Agents drift to their favorite framework and re-architect per feature. The following decisions are made up front and OpenCode must implement _against_ them, not around them.
 
 ### D1 — Constrained stack selection, justified by decision matrix
 
@@ -36,7 +37,7 @@ In P0 OpenCode selects the stack, but not freely. It must produce `docs/DECISION
 - **Candidates considered** (minimum 3 per slot).
 - **Decision criteria, weighted**: local-first operation, type safety across frontend/backend, migration tooling maturity, testability without hardware, dependency count and maintenance risk, audit-able path, offline capability, packaging/distribution feasibility.
 - **Explicit rejection reasons** for each non-selected candidate.
-- **Dependency budget**: the backend may not exceed 40 direct production dependencies without a reviewed amendment entry to `DECISIONS.md`. A *production dependency* is a direct runtime dependency declared for the deployed backend artifact; build/dev/test tooling is excluded from the budget but must be inventoried. Transitive dependencies do not count against the budget but must be reported and reviewed for risk. The budget is a governance limit, not an incentive: if staying under it would mean replacing a safe, maintained library with riskier custom code, take the dependency and record an amendment instead.
+- **Dependency budget**: the backend may not exceed 40 direct production dependencies without a reviewed amendment entry to `DECISIONS.md`. A _production dependency_ is a direct runtime dependency declared for the deployed backend artifact; build/dev/test tooling is excluded from the budget but must be inventoried. Transitive dependencies do not count against the budget but must be reported and reviewed for risk. The budget is a governance limit, not an incentive: if staying under it would mean replacing a safe, maintained library with riskier custom code, take the dependency and record an amendment instead.
 
 Constraints: frontend and backend must share the type definitions (single language or official same-language binding). The database must run as one local process or file (SQLite/Postgres-local/LevelDB-class) — no external DB service. Real-time communication (dashboard live view) must work over LAN without a cloud broker.
 
@@ -44,7 +45,7 @@ Constraints: frontend and backend must share the type definitions (single langua
 
 The core entities, their relationships, and event semantics are documented in `docs/DOMAIN.md` during P0 and are the authoritative reference for all later phases. Minimum required entities:
 
-- `Site` (single installation; the plan targets one 4 m opening / ~200 kg sliding gate — *provisional*, never verified)
+- `Site` (single installation; the plan targets one 4 m opening / ~200 kg sliding gate — _provisional_, never verified)
 - `Gate` and `GateSession` (movement lifecycle: idle → opening → open → closing → idle, with fault-injected states)
 - `Operator` (the physical controller adapter identity, configure-time only, absent in simulation)
 - `VisitorCredential` (PIN: issuance → valid window → spent/expired/revoked; one-time vs multi-use limits)
@@ -57,7 +58,7 @@ The core entities, their relationships, and event semantics are documented in `d
 
 Event semantics that must be pinned in P0:
 
-- **Append-only audit trail**: `AuditRecords` are written forward-only. No update, no delete, no upsert. Retention and export are separate operations that never rewrite the audit table. Corrections to a *previous decision* are recorded as a **new** audit record referencing the earlier one, not an edit.
+- **Append-only audit trail**: `AuditRecords` are written forward-only. No update, no delete, no upsert. Retention and export are separate operations that never rewrite the audit table. Corrections to a _previous decision_ are recorded as a **new** audit record referencing the earlier one, not an edit.
 - Order of recording: a physical or access event writes (1) event, (2) access decision if any, (3) audit record, in that order, in one transaction-adjacent batch.
 - Every event has a `source` (`simulated` | `live` | `imported`) and this flag is never reinterpreted after write.
 
@@ -74,10 +75,10 @@ Required primary contracts (typed, versioned):
 
 Rules:
 
-1. The simulator implements the *same* contracts; nothing in the app knows which implementation is primed.
+1. The simulator implements the _same_ contracts; nothing in the app knows which implementation is primed.
 2. Hardware adapters may only be added after review of an explicit, verifiable interface specification. "It has a REST API" is not a specification.
-3. No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead. *(Rewritten by Amd 2.2, owner-approved: Gatehead is a policy-free typed device layer — it exposes commands, telemetry, and adapter status and performs no authorization. The Actuation Coordinator owns the single controlled actuation workflow and depends on both the access-control service and Gatehead, so authorization always precedes Gatehead receiving a command. Original wording preserved in the amendment log above.)*
-4. **Actuation path — one, and only one**: `authenticate → authorize → validate request → check safety interlocks → record decision → issue command via the approved Gatehead adapter`. The order is: authenticate, authorize, validate, interlock-check, then **record decision**, then actuate. Recording happens *before* actuation, because a command that cannot be audited must not be issued. Snapshot/camera capture is a post-command evidence step, not a precondition — a failed snapshot must not silently cancel a safety-relevant command, and a successful snapshot must not bypass the audit step. This depends on storage semantics: where snapshots are stored (file, blob, event-attached) and whether the snapshot write is best-effort or blocking is decided in D1/D2 and pinned in `DOMAIN.md` — the default is: audit record accepts an optional `evidence_ref` that may be filled asynchronously, so actuation is never blocked by snapshot latency.
+3. No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead. _(Rewritten by Amd 2.2, owner-approved: Gatehead is a policy-free typed device layer — it exposes commands, telemetry, and adapter status and performs no authorization. The Actuation Coordinator owns the single controlled actuation workflow and depends on both the access-control service and Gatehead, so authorization always precedes Gatehead receiving a command. Original wording preserved in the amendment log above.)_
+4. **Actuation path — one, and only one**: `authenticate → authorize → validate request → check safety interlocks → record decision → issue command via the approved Gatehead adapter`. The order is: authenticate, authorize, validate, interlock-check, then **record decision**, then actuate. Recording happens _before_ actuation, because a command that cannot be audited must not be issued. Snapshot/camera capture is a post-command evidence step, not a precondition — a failed snapshot must not silently cancel a safety-relevant command, and a successful snapshot must not bypass the audit step. This depends on storage semantics: where snapshots are stored (file, blob, event-attached) and whether the snapshot write is best-effort or blocking is decided in D1/D2 and pinned in `DOMAIN.md` — the default is: audit record accepts an optional `evidence_ref` that may be filled asynchronously, so actuation is never blocked by snapshot latency.
 5. Interfaces evolve additively (new fields, new methods) — a breaking change to a Gatehead contract requires an explicit amendment entry in `DECISIONS.md`.
 
 ### D4 — Reliable time, timezone, and expiry semantics
@@ -115,6 +116,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** A complete, reviewable plan with zero implementation. The repo may already contain code from prior sessions or a novel state — inspect first.
 
 **Deliverables (all in the repo, nothing executable):**
+
 - `docs/RECON.md`: repository inventory (what files exist, current state, dead code, prior session state, scripts).
 - `docs/REQUIREMENTS.md`: expanded from the feature matrix; every feature mapped to the entities it reads/writes and the Gatehead contracts it needs.
 - `docs/DOMAIN.md`: core entity/relationship model, event semantics, append-only audit rules, time semantics (per D2/D4), state machine definitions (gate lifecycle, credential lifecycle, decision lifecycle).
@@ -123,7 +125,7 @@ This is the only place where the system takes irreversible physical action.
 - `docs/DECISIONS.md`: decision matrix and choices per D1, plus the first entries in the decision register.
 - `docs/ASSUMPTIONS.md`: every claim made without evidence (mechanical specs, camera placement, network topology, operator model, etc.) listed as `provisional` with a planned verification step.
 - Empty `docs/README.md` index.
-- `docs/NEXT.md`: prescribed contents that P1 will need to *review against* (naming conventions, terminal framework commands, directory layout skeleton), so P1's first commit can be checked against it.
+- `docs/NEXT.md`: prescribed contents that P1 will need to _review against_ (naming conventions, terminal framework commands, directory layout skeleton), so P1's first commit can be checked against it.
 
 **Allowed:** reading the repo, creating or reorganizing `docs/`, running read-only commands.
 **Forbidden:** installing dependencies, creating app code, generating tests, generating screenshots or preview assets, upgrading anything, cleanup work.
@@ -137,6 +139,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** A responsive, premium dark security dashboard shell and a design system, with no live or simulated complex behavior.
 
 **Deliverables:**
+
 - Design tokens (color, type, spacing, elevation, motion) file(s).
 - Core component library: button, card, table, chart (axis, tooltip, colorblind-safe palettes), status indicator (state, fault, simulated-not-configured-live indicator), form input, badge, modal, toast, empty-state, loading skeleton, error boundary page.
 - Navigation shell (primary, secondary, feature-matrix routes for all 12 features, responsive breakpoints).
@@ -155,6 +158,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** The rules of the system, provable without any screen or device.
 
 **Deliverables:**
+
 - Domain logic implementing `DOMAIN.md`: gate lifecycle, credential lifecycle (issue/validate/spend/expire/revoke), plate authorization, decision recording, audit writes, time semantics.
 - Gatehead simulator implementations per D3 (virtual gate operator, virtual cameras, virtual safety sensors, virtual ANPR provider), plus a scripted scenario runner.
 - Fault injection: sensor failure, network loss, clock drift (per D4), out-of-range ANPR confidence, duplicate events, out-of-order events.
@@ -171,6 +175,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** Every screen operates from real application services (via P2 domain core and the simulator), not mock data.
 
 **Deliverables:**
+
 - All 12 feature views wired to real services.
 - Handling for loading, error, offline, unauthorized, fault, and simulated/live indicator states.
 - Live dashboard view fed from simulated Gatehead streams.
@@ -187,6 +192,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** The system can protect its own data.
 
 **Deliverables:**
+
 - Database, schema, migrations (forward-only, testable up/down/replay).
 - Access service: authentication (documented argon2-class parameters, per D1 constraints — no unsalted MD5/SHA1), role-based authorization, secure session handling, CSRF handling.
 - Visitor PIN lifecycle wired to the persistence layer and governing exposure model in `THREAT_MODEL.md`, including throttling, lockout, constant-time comparisons.
@@ -204,8 +210,9 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** Interfaces for real-world systems exist, are typed, and are validated — with nothing live.
 
 **Deliverables:**
+
 - Adapter interfaces and mock implementations for Frigate, Home Assistant, an ANPR model harness (model files staged locally when available), camera streams, and controller telemetry.
-- `docs/INTEGRATIONS.md`: exact behaviors, expected response shapes, offline behavior, configuration validation rules, and — where relevant — which claims are *provisional* until hardware is acquired.
+- `docs/INTEGRATIONS.md`: exact behaviors, expected response shapes, offline behavior, configuration validation rules, and — where relevant — which claims are _provisional_ until hardware is acquired.
 - Configuration validation with fail-closed behavior: missing hardware or credentials make the corresponding feature return `unconfigured` cleanly and visibly in the UI.
 - Contract tests for each adapter against recordings/fixtures; no network calls in tests.
 
@@ -220,6 +227,7 @@ This is the only place where the system takes irreversible physical action.
 **Goal:** Prove the plan's claims or retire them.
 
 **Deliverables:**
+
 - Security review against `THREAT_MODEL.md` (session handling, PIN flow, injection, host-based threats, dependency audit).
 - Safety-boundary review: verify no code path outside the single actuation path can issue a command; verify interlock preconditions; verify the audit-before-actuate ordering.
 - Offline-operation verification: scripted tests with network disabled; only then may any artifact claim offline capability, with a link to the test.
@@ -230,6 +238,7 @@ This is the only place where the system takes irreversible physical action.
 - A regression test suite running against simulated data with no hardware.
 
 **Required outputs:**
+
 - `docs/COMMISSIONING.md` — hardware-readiness matrix and commissioning checklist.
 
 **Forbidden:** enabling any real actuation path. Nothing in this phase sells the software as hardware-ready.

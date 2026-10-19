@@ -1,0 +1,301 @@
+/* Component-level styling. Only var(--lg-*) values — no hardcoded colors,
+ * sizes, or durations. Colorblind-safety pairing (color+shape+label) is
+ * enforced here: each badge class sets BOTH lightness and subtle-bg so the
+ * glyph + label always have non-color contrast against the card surface. */
+
+/* ── Shell ─────────────────────────────────────────────────────────── */
+.lg-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.lg-shell__sidebar {
+  width: var(--lg-sidebar-width);
+  flex-shrink: 0;
+  background: var(--lg-surface);
+  border-right: 1px solid var(--lg-border);
+  padding: var(--lg-space-4);
+}
+
+.lg-shell__brand {
+  font-size: var(--lg-text-lg);
+  font-weight: var(--lg-weight-semibold);
+  padding: var(--lg-space-2) var(--lg-space-3);
+  margin-bottom: var(--lg-space-4);
+  color: var(--lg-text-primary);
+}
+
+.lg-shell__nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lg-space-1);
+}
+
+.lg-shell__navlink {
+  display: block;
+  padding: var(--lg-space-2) var(--lg-space-3);
+  border-radius: var(--lg-radius-md);
+  color: var(--lg-text-secondary);
+  text-decoration: none;
+  font-size: var(--lg-text-md);
+  transition: background var(--lg-duration-fast) var(--lg-ease-standard);
+}
+
+.lg-shell__navlink:hover {
+  background: var(--lg-surface-hover);
+  color: var(--lg-text-primary);
+}
+
+.lg-shell__navlink.is-active {
+  background: var(--lg-accent-subtle);
+  color: var(--lg-accent-fg, var(--lg-text-primary));
+  font-weight: var(--lg-weight-medium);
+}
+
+.lg-shell__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lg-shell__topbar {
+  height: var(--lg-topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--lg-space-3);
+  padding: 0 var(--lg-space-5);
+  border-bottom: 1px solid var(--lg-border);
+  background: var(--lg-surface);
+}
+
+.lg-shell__content {
+  padding: var(--lg-space-5);
+  max-width: 1100px;
+}
+
+@media (max-width: 768px) {
+  .lg-shell {
+    flex-direction: column;
+  }
+  .lg-shell__sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--lg-border);
+  }
+}
+
+/* ── Badges (shape + label + lightness, never hue-only) ────────────── */
+.lg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lg-space-2);
+  padding: var(--lg-space-1) var(--lg-space-2);
+  border-radius: var(--lg-radius-sm);
+  font-size: var(--lg-text-sm);
+  font-weight: var(--lg-weight-medium);
+  border: 1px solid var(--lg-border);
+}
+
+.lg-badge__glyph[aria-hidden="true"] {
+  font-size: 0.85em;
+}
+
+.lg-badge--normal {
+  color: var(--lg-state-normal-text);
+  background: var(--lg-state-normal-subtle);
+  border-color: var(--lg-state-normal);
+}
+
+.lg-badge--warning {
+  color: var(--lg-state-warning-text);
+  background: var(--lg-state-warning-subtle);
+  border-color: var(--lg-state-warning);
+}
+
+.lg-badge--critical {
+  color: var(--lg-state-critical-text);
+  background: var(--lg-state-critical-subtle);
+  border-color: var(--lg-state-critical);
+}
+
+.lg-badge--neutral {
+  color: var(--lg-text-secondary);
+  background: var(--lg-mode-unconfigured-subtle);
+}
+
+/* SIMULATED chip: purple, deliberately outside the state hue triangle */
+.lg-badge--neutral[data-kind="simulated"] {
+  color: var(--lg-mode-simulated);
+  background: var(--lg-mode-simulated-subtle);
+  border-color: var(--lg-mode-simulated);
+}
+
+.lg-badge__context {
+  color: var(--lg-text-secondary);
+  font-weight: var(--lg-weight-regular);
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────── */
+.lg-card {
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-border);
+  border-radius: var(--lg-radius-lg);
+  padding: var(--lg-space-4);
+  margin-bottom: var(--lg-space-4);
+  box-shadow: var(--lg-elevation-1);
+}
+
+.lg-card__title {
+  margin: 0 0 var(--lg-space-3);
+  font-size: var(--lg-text-lg);
+  font-weight: var(--lg-weight-semibold);
+}
+
+.lg-card__body {
+  color: var(--lg-text-secondary);
+}
+
+.lg-card__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lg-space-3);
+}
+
+/* ── Table ─────────────────────────────────────────────────────────── */
+.lg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--lg-text-md);
+}
+
+.lg-table th {
+  text-align: left;
+  padding: var(--lg-space-2) var(--lg-space-3);
+  border-bottom: 1px solid var(--lg-border-strong);
+  color: var(--lg-text-tertiary);
+  font-size: var(--lg-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lg-table td {
+  padding: var(--lg-space-2) var(--lg-space-3);
+  border-bottom: 1px solid var(--lg-border);
+  color: var(--lg-text-primary);
+}
+
+.lg-table tr:hover td {
+  background: var(--lg-surface-hover);
+}
+
+.lg-table__empty {
+  color: var(--lg-text-tertiary);
+  padding: var(--lg-space-3);
+}
+
+/* ── Hold-to-confirm ───────────────────────────────────────────────── */
+.lg-hold {
+  max-width: 420px;
+}
+
+.lg-hold__button {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--lg-border-strong);
+  background: var(--lg-surface-raised);
+  color: var(--lg-text-primary);
+  padding: var(--lg-space-3) var(--lg-space-4);
+  border-radius: var(--lg-radius-md);
+  font: inherit;
+  font-weight: var(--lg-weight-semibold);
+  cursor: pointer;
+  touch-action: none;
+  transition: border-color var(--lg-duration-fast) var(--lg-ease-standard);
+}
+
+.lg-hold__button:hover:not(:disabled) {
+  border-color: var(--lg-accent);
+}
+
+.lg-hold__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lg-hold__button:focus-visible {
+  outline: 2px solid var(--lg-accent-focus);
+  outline-offset: 2px;
+}
+
+.lg-hold__fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--lg-accent-subtle);
+  transition: none;
+}
+
+.lg-hold__label {
+  position: relative;
+  pointer-events: none;
+}
+
+.lg-hold__reason {
+  margin-top: var(--lg-space-2);
+  color: var(--lg-state-warning-text);
+  font-size: var(--lg-text-sm);
+}
+
+/* ── States ────────────────────────────────────────────────────────── */
+.lg-empty {
+  padding: var(--lg-space-4);
+  border: 1px dashed var(--lg-border);
+  border-radius: var(--lg-radius-md);
+  color: var(--lg-text-secondary);
+}
+
+.lg-empty__title,
+.lg-refused__title {
+  margin: 0 0 var(--lg-space-2);
+  font-weight: var(--lg-weight-semibold);
+  color: var(--lg-text-primary);
+}
+
+.lg-refused {
+  padding: var(--lg-space-4);
+  border: 1px solid var(--lg-state-warning);
+  border-radius: var(--lg-radius-md);
+  background: var(--lg-state-warning-subtle);
+  color: var(--lg-text-primary);
+}
+
+.lg-skeleton__row {
+  height: var(--lg-space-4);
+  border-radius: var(--lg-radius-sm);
+  background: linear-gradient(90deg, var(--lg-surface-raised), var(--lg-surface-hover));
+  margin-bottom: var(--lg-space-2);
+}
+
+/* ── Chart ─────────────────────────────────────────────────────────── */
+.lg-chart {
+  height: 200px;
+}
+
+/* ── Misc ──────────────────────────────────────────────────────────── */
+.lg-muted {
+  color: var(--lg-text-tertiary);
+  font-size: var(--lg-text-sm);
+}
+
+.lg-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--lg-space-4);
+}

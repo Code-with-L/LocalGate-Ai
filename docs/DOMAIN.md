@@ -8,15 +8,15 @@
 ## 0. Operating mode (F-03 resolution, per Amd 2.1)
 
 ```ts
-type OperatingMode = 'SIMULATED' | 'UNCONFIGURED' | 'LIVE';
+type OperatingMode = "SIMULATED" | "UNCONFIGURED" | "LIVE";
 
 interface DeviceStatus<O = object> {
   mode: OperatingMode;
-  health: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
-  connectivity: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
-  config_validity: 'VALID' | 'INVALID' | 'UNKNOWN';
-  last_reported_at: string;        // server time, UTC ISO-8601, may be absent
-  oxidation: O;                    // adapter-specific details
+  health: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+  connectivity: "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
+  config_validity: "VALID" | "INVALID" | "UNKNOWN";
+  last_reported_at: string; // server time, UTC ISO-8601, may be absent
+  oxidation: O; // adapter-specific details
 }
 ```
 
@@ -25,7 +25,7 @@ Cross-invariant enforced at the type level: a device's `mode` is a singular disc
 **Event source classification** (separate from adapter mode; frozen at write time, never backfilled):
 
 ```ts
-type EventSource = 'simulated' | 'live' | 'imported';
+type EventSource = "simulated" | "live" | "imported";
 ```
 
 Mapping is one-way and recorded when the event is appended: an event emitted by the simulator is `simulated`, one from a LIVE path is `live`, data restored via maintenance tooling is `imported`. GUI legibility (C5) uses the mode enum; event `source` drives lineage/audit queries.
@@ -44,8 +44,8 @@ Mapping is one-way and recorded when the event is appended: an event emitted by 
 6. PlateAuthorization
 7. AccessDecision
 8. Camera
-9. CameraStream *(composition child of Camera)*
-10. Detection *(composition child of Camera)*
+9. CameraStream _(composition child of Camera)_
+10. Detection _(composition child of Camera)_
 11. SafetyDevice
 12. Fault
 13. AuditRecord
@@ -55,12 +55,14 @@ Mapping is one-way and recorded when the event is appended: an event emitted by 
 ## 2. Entities
 
 Common conventions unless stated otherwise:
+
 - **Identifiers:** UUID v7 (time-ordered, safe to sort by id in logs).
 - **Time:** server-time UTC ISO-8601; D4 rules apply; audit records carry both `occurred_at_server_utc` and, where relevant, `device_last_reported_at` for freshness attribution.
 - **Credentials/storage:** all credential material stored one-way (scrypt per `DECISIONS.md` DEC-008) or as opaque tokens; no reversible storage of user passwords.
 - **Simulator parity:** every entity's lifecycle is exercised identically whether the underlying device adapter was `SIMULATED` or `LIVE` — prop-driven, one code path (D2).
 
 ### 2.1 Site
+
 - Purpose: top-level composition root.
 - Fields: `id`, `name`, `created_at`.
 - Lifecycle: created in maintenance tooling; no runtime transitions.
@@ -68,6 +70,7 @@ Common conventions unless stated otherwise:
 - Source of truth: where adapters discovery is keyed (simulated adapter accounts have a site id too, so switching mode never breaks referential structure).
 
 ### 2.2 Gate
+
 - Purpose: the single controlled opening.
 - Fields: `id`, `site_id`, `name`, `type` (`sliding` | other), `commissioning_state` (`SIMULATED` | `UNCONFIGURED` | `LIVE`), `rated_specs`, `timestamps`.
 - **State machine** (actuation state, authoritative):
@@ -82,41 +85,48 @@ IDLE | OPENING | OPEN_AWAIT_CLOSE | CLOSING | HALTED_SAFETY_STOP
    │
    └─(unknown/faulted adapter, watchdog expiry)──▶ FAULT_UNKNOWN
 ```
+
 - Invariants: only one non-terminal transition target at a time; a command must specify which state it claims to transition **from**, and the coordinator rejects if `from` does not match (no lost-update across concurrent actors); every state change is emitted as a `GateStateChange` event with `source`.
 - Unknown sub-states (all sources): `HALTED_SAFETY_STOP` when photocell/safety edge blocks closing; `FAULT_UNKNOWN` on adapter loss; recovery only through explicit `resume` command, never silent auto-resume.
 
 ### 2.3 GateSession
+
 - Purpose: identifies **why** a credential or plate was admitted; groups AccessDecisions.
 - Fields: `id`, `visitor_credential_id?` (null when the actor is an Operator), `operator_id?`, `started_at`, `ended_at?`, `context` (`dashboard` | `visitor_pin` | `anpr_pass`), `source` (`live` | `simulated` | `imported`).
 - Lifecycle: `OPEN` → `CLOSED` (by explicit end action, session timeout, or `gate spooky_decay` — see 2.4). Sessions outlive credentials they used; re-use policy per credential type.
 - Invariants: at most one open session per credential at a time; ended sessions are immutable (new session for new entry in scheduled cadence even for the same credential).
 
 ### 2.4 GateSession timeout (exact rule)
+
 - Default: 10 min inactivity timeout, **configurable**.
 - Timeout is a dashboard-visible event (`source: live` if triggered by backend clock, `simulated` if triggered by the simulator clock adapter).
 - On timeout, session ends; no credential is invalidated; **no readiness is claimed** — any subsequent need re-touches the credential to re-check state.
 - Re-open within timeout window: allowed; counts as one visit per `VisitorCredential` policy.
 
 ### 2.5 Operator
+
 - Purpose: enrolled human role for dashboard/tier.
 - Fields: `id`, `name`, `role` (`ADMIN` | `OPERATOR`), `created_at`, `last_login_at?`, `passkey_hash` (scrypt or equivalent at rest), `passkey_rotated_at`, rotation policy reference, `is_active`.
 - Lifecycle: `ACTIVE` ⇄ `SUSPENDED` (maintenance only, preserving audit trail); `is_active=false` blocks new logins but retains historical attributions.
 - Invariants: ADMIN/OPERATOR separation (read/review vs change commands) is enforced by AccessControl role table, not by this entity; deletions are not performed — `SUSPENDED` + audit trail instead.
 
 ### 2.6 VisitorCredential
+
 - Purpose: token given to a guest (kasna PIN, physical card emulation later).
 - Fields: `id`, `site_id`, `pin_hash` (scrypt), `created_at`, `valid_from`, `valid_until?`, `max_uses?` (unlimited unless set), `is_revoked`, `revoked_at?`, `issued_by` (Operator id), `created_source` (`live` | `simulated`), `active_attempts_window_config` ref.
 - Lifecycle: `CREATED` → `ACTIVE` (between `valid_from`/`valid_until`) → `EXPIRED` (invoked by clock) → or `REVOKED` (explicit admin action, terminal).
 - Status is **computed** at read time from `valid_from`/`valid_until`/`is_revoked` (rule frozen in API docs), not duplicated as a stored boolean, to avoid clock-dependency inconsistency.
-- Invariants: PIN storage one-way (scrypt, same parameters as Operator per DEC-008); PIN values ≥ 6 digits; no plaintext retention; no plaintext logging anywhere (threat model covers); revocation supersedes any in-flight `GateSession` for future *attempts only* (already-recorded decisions stand, they are historical facts).
+- Invariants: PIN storage one-way (scrypt, same parameters as Operator per DEC-008); PIN values ≥ 6 digits; no plaintext retention; no plaintext logging anywhere (threat model covers); revocation supersedes any in-flight `GateSession` for future _attempts only_ (already-recorded decisions stand, they are historical facts).
 
 ### 2.7 PlateAuthorization
+
 - Purpose: bind a detected plate to a permitted context.
 - Fields: `id`, `site_id`, `plate_raw`, `plate_normalized` (country-aware), `visitor_credential_id?` (or check against an allowlist), `created_at`, `revoked_at?`, `created_by`, `created_source`.
 - Lifecycle similar to `VisitorCredential`: `ACTIVE` → `REVOKED`.
 - Invariants: `plate_raw` is only ever written from a `Detection` (never hand-typed); normalization rules are versioned and upgrade-safe (rows keep `plate_raw`, `plate_normalized` is recomputed for display, not for matching — matching always uses the stored normalized value at write time, never re-derives).
 
 ### 2.8 AccessDecision
+
 - Purpose: the authoritative record of a gate-coach actuation decision. **Terminal and immutable.**
 - Fields: `id`, `gate_id`, `gate_session_id?`, `actor_type` (`DISPLAYUSER` | `ANPR_GUEST` | `VISITOR_PIN` | `OPERATOR`), `subject_type`, `subject_id`, `dispatched_at_server_utc`, `outcome` (`GRANTED` | `DENIED`), `denied_reason` (filled only when `DENIED` — see F-05 enum below), `correlation_id` (links to the attempt that produced it), `audit_record_id`, `evidence` (`snapshot_evidence_ref[]`, filled asynchronously).
 - Lifecycle: `EVALUATED` as the only terminal state (no pending/retry concept; denied decisions are recorded, never suppressed).
@@ -125,33 +135,39 @@ IDLE | OPENING | OPEN_AWAIT_CLOSE | CLOSING | HALTED_SAFETY_STOP
 - Invariants: every actuation has exactly one `AccessDecision`; there is no path to actuate that bypasses evaluation; audit references this row.
 
 ### 2.9 Camera
+
 - Fields: `id`, `site_id`, `label`, `operator_gate_side` (`passenger` | other, extensible), `stream_cfg_ref`, `mode` (OperatingMode), `connection_profile` (defined only when `mode='LIVE'`), `config_validity`.
 - Lifecycle: created in maintenance tooling; `mode` and diagnostics follow `DeviceStatus`.
 - Invariants: a camera **owns** exactly one `CameraStream` and zero-or-more `Detection` rows; a camera has exactly one adapter record at a time (connection config is adapter-versioned, not free-form).
 
-### 2.10 CameraStream *(child of Camera)*
+### 2.10 CameraStream _(child of Camera)_
+
 - Fields: `id`, `camera_id`, `started_at`, `ended_at?`, `source` (`live` | `simulated` | `imported`), `codec_info?` (recorded at capture time, not relabeled).
 - Lifecycle: `OPEN` → `CLOSED` (per actual consumption windows; not a placeholder for "future streaming").
 - Invariants: opening/closing snapshots are **backend-authoritative only** — they must reference an existing stream or be recorded as `snapshot_unavailable`.
 
-### 2.11 Detection *(child of Camera)*
+### 2.11 Detection _(child of Camera)_
+
 - Fields: `id`, `camera_id`, `camera_stream_id?` (populated when the detection happened against an open stream), `first_seen_at`, `last_confirmed_at`, `plate_raw` (if ANPR), `plate_confidence`, `detection_source` (`simulated` | `frigate` | `onnx` | `imported`), `snapshot_evidence_ref`.
 - Lifecycle: stateless observation row (append-only); `last_confirmed_at` extends the window if the same plate re-appears (a fresh row is recorded for material re-detections if a new authorization is evaluated).
 - Invariants: `plate_confidence` in [0,1]; a row below a **recorded** confidence threshold is not used to build `PlateAuthorization` rows; never silently relabeled.
 
 ### 2.12 SafetyDevice
+
 - Fields: `id`, `gate_id`, `device_type` (`PHOTOCELL` | `SAFETY_EDGE` | other, extensible), `mode` (OperatingMode), `last_reported_at`, `reported_state` (`CLEAR` | `TRIGGERED` | `UNCLEAR` | `UNKNOWN`), `staleness_threshold_ref` (config).
 - Lifecycle: state changes appended as events; current row is a projection (D2).
 - Invariants: `reported_state` transitions always from an annotated source (`simulated`/`live`/`imported`); dispatch from `Gate` actuation flow must reject when `last_reported_at` is older than the configured staleness threshold (per Amd 2.1 D5 refinement), and must reject when the record doesn't exist as well as when it is stale.
 
 ### 2.13 Fault
+
 - Fields: `id`, `gate_id`, `camera_id?`, `safety_device_id?`, `raised_at`, `kind` (`OPERATOR_UNREACHABLE` | `SAFETY_TRIGGER` | `ANPR_INFER_FAIL` | `SCHEDULE_MISS` | other, extensible), `severity` (`INFO` | `WARN` | `CRITICAL`), `resolved_at?`, `source` (`live` | `simulated` | `imported`).
 - Lifecycle: `RAISED` → `RESOLVED` (explicit, or superseded by a `Fault` of the same correlation id with `RESOLVED` in synthetic re-derivation); there is no scheduled auto-resolve.
 - Invariants: FAULT rows carry their own `evidence_ref` (logs etc.), not the media snapshot that an `AccessDecision` carries.
 
 ### 2.14 AuditRecord
+
 - Fields: `id`, `ts_server_utc`, `occurred_at_device_source` (info, optional), `actor` (Operator id, `DISPLAYUSER`-anonymous, `VISITOR_PIN` subject, or system), `action` (verb: `LOGIN_ATTEMPT`, `OPEN_GATE_ISSUED`, `OPEN_GATE_DISPATCH`, `SNAPSHOT_SAVED`, `CREDENTIAL_CREATED`, `DECISION_RECORDED`, …, enumerated and versioned), `subject_ref` (`entity_type`, `entity_id`), `decision_ref?`, `request_origin` (`dashboard_ui` | `rest_api` | `simulator`) present, `payload_digest` (hash of redacted-at-write details; payload itself never re-recorded).
-- **Append-only, forward-only** (D2): corrections are *new records* referencing the original via `correction_of`, never rewrites or deletes.
+- **Append-only, forward-only** (D2): corrections are _new records_ referencing the original via `correction_of`, never rewrites or deletes.
 - Invariants: for every actuation a matching `AccessDecision` and ≥1 `AuditRecord` must exist; audits reference decisions, not other audits (except `correction_of`).
 
 ## 3. Cross-cutting invariants
@@ -163,27 +179,27 @@ IDLE | OPENING | OPEN_AWAIT_CLOSE | CLOSING | HALTED_SAFETY_STOP
 
 ## 4. Derived objects (not entities)
 
-| Object | Derived from | Format |
-|---|---|---|
-| Dashboard telemetry | `DeviceStatus` projection + backend clock | SSE stream payload |
-| Site-day report | `Detection`, `GateSession`, `Fault`, `AuditRecord` | JSON download served from SQLite |
-| Audit trail export | `AuditRecord` + linked `AccessDecision`, `GateSession` | append-only JSONL |
-| Time alignment | backend vs. device-claimed clock | stored at capacity as `ts` facts only |
+| Object              | Derived from                                           | Format                                |
+| ------------------- | ------------------------------------------------------ | ------------------------------------- |
+| Dashboard telemetry | `DeviceStatus` projection + backend clock              | SSE stream payload                    |
+| Site-day report     | `Detection`, `GateSession`, `Fault`, `AuditRecord`     | JSON download served from SQLite      |
+| Audit trail export  | `AuditRecord` + linked `AccessDecision`, `GateSession` | append-only JSONL                     |
+| Time alignment      | backend vs. device-claimed clock                       | stored at capacity as `ts` facts only |
 
 ## 5. Phase coverage matrix (for NEXT.md)
 
-| Entity | Created (state) | Constrained behaviors | Referenced |
-|---|---|---|---|
-| Site | P2 (seeded by C2 init) | — | all |
-| Gate | P2 | actuation state machine D2 | P2..P5 |
-| GateSession | P2 | timeout rules (§2.4) | P2..P5 |
-| Operator | P4 (auth), seeded P2 | suspension, rotation | P3..P4 |
-| VisitorCredential | P4 | lifecycle, revocation | P2, P4..P5 |
-| PlateAuthorization | P4 | normal forms | P4..P5 |
-| AccessDecision | P2 (records are write-only) | outcome/denied_reason | P2..P5 |
-| Camera | P2 (seeded P1) | mode/status | P2..P5 |
-| CameraStream | P2 (P5 live real) | snapshot binding | P2..P5 |
-| Detection | P2 (simulated), P5 (live) | confidence thresholds | P3..P5 |
-| SafetyDevice | P2 | staleness rejection | P2..P5 |
-| Fault | P2 | resolution semantik | P2..P5 |
-| AuditRecord | P2 | append-only | P2..P6 |
+| Entity             | Created (state)             | Constrained behaviors      | Referenced |
+| ------------------ | --------------------------- | -------------------------- | ---------- |
+| Site               | P2 (seeded by C2 init)      | —                          | all        |
+| Gate               | P2                          | actuation state machine D2 | P2..P5     |
+| GateSession        | P2                          | timeout rules (§2.4)       | P2..P5     |
+| Operator           | P4 (auth), seeded P2        | suspension, rotation       | P3..P4     |
+| VisitorCredential  | P4                          | lifecycle, revocation      | P2, P4..P5 |
+| PlateAuthorization | P4                          | normal forms               | P4..P5     |
+| AccessDecision     | P2 (records are write-only) | outcome/denied_reason      | P2..P5     |
+| Camera             | P2 (seeded P1)              | mode/status                | P2..P5     |
+| CameraStream       | P2 (P5 live real)           | snapshot binding           | P2..P5     |
+| Detection          | P2 (simulated), P5 (live)   | confidence thresholds      | P3..P5     |
+| SafetyDevice       | P2                          | staleness rejection        | P2..P5     |
+| Fault              | P2                          | resolution semantik        | P2..P5     |
+| AuditRecord        | P2                          | append-only                | P2..P6     |

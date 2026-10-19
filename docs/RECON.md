@@ -1,6 +1,6 @@
 # P0 Discovery Report — LocalGate AI
 
-**Status:** Complete. Read-only phase; no code written, no dependencies installed, and **no plan edit was made in this pass** (the plan amendment 2.1 was committed *before* P0 began, at the project owner's request, as part of the pre-P0 review refinements).
+**Status:** Complete. Read-only phase; no code written, no dependencies installed, and **no plan edit was made in this pass** (the plan amendment 2.1 was committed _before_ P0 began, at the project owner's request, as part of the pre-P0 review refinements).
 
 ## 1. Method
 
@@ -17,20 +17,20 @@ No build tool, package manager, test runner, or linter was invoked — none exis
 
 ## 2. Repository inventory
 
-| Item | Finding |
-|---|---|
-| Branch | `main` (only branch) |
+| Item                | Finding                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| Branch              | `main` (only branch)                                                                       |
 | Commits at P0 start | 2 (`9f3be85` plan rev 2; `4d012af` Amd 2.1 — author: OpenCode, pre-P0 approved refinement) |
-| Files | `docs/OPENCODE_BUILD_PLAN.md` only |
-| READMEs | none (until this pass) |
-| Package manifests | none — first one is created in P1 |
-| Tests, CI, tooling | none |
-| Source code | none |
-| Uncommitted changes | none left after the Amd 2.1 commit |
+| Files               | `docs/OPENCODE_BUILD_PLAN.md` only                                                         |
+| READMEs             | none (until this pass)                                                                     |
+| Package manifests   | none — first one is created in P1                                                          |
+| Tests, CI, tooling  | none                                                                                       |
+| Source code         | none                                                                                       |
+| Uncommitted changes | none left after the Amd 2.1 commit                                                         |
 
 ## 3. Existing decisions recorded in the plan (inherited, not re-decided)
 
-Constraints C1–C5, architecture decisions D1–D5 as amended by Amd 2.1, the 8-phase roadmap, and the scope-audit protocol. The two items that the plan itself carries as undecided parameters (TLS bind configuration, ANPR runtime choice) were resolved *provisionally* in this pass — see `DECISIONS.md` DEC-009/DEC-010 and `THREAT_MODEL.md` §3 — and remain subject to review.
+Constraints C1–C5, architecture decisions D1–D5 as amended by Amd 2.1, the 8-phase roadmap, and the scope-audit protocol. The two items that the plan itself carries as undecided parameters (TLS bind configuration, ANPR runtime choice) were resolved _provisionally_ in this pass — see `DECISIONS.md` DEC-009/DEC-010 and `THREAT_MODEL.md` §3 — and remain subject to review.
 
 ## 4. Contradiction findings from inspection (no silent edits)
 

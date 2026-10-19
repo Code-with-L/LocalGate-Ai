@@ -1,0 +1,133 @@
+/*
+ * LocalGate AI — P1 design tokens.
+ * Source of truth for visual language: docs/DESIGN.md. Never hardcode these
+ * values in components; components consume them via var(--lg-*).
+ *
+ * Colorblind-safety rule (NEXT.md §2 binding): state colors never rely on hue
+ * alone. Each state also carries a distinct lightness level plus a mandatory
+ * text label and a shape prefix (● / ▲ / ■) rendered by <StatusBadge>.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces (dark default palette) ─────────────────────────────── */
+  --lg-bg: #0d1117;
+  --lg-surface: #161b27;
+  --lg-surface-raised: #1d2433;
+  --lg-surface-hover: #232c3f;
+  --lg-border: #2a3348;
+  --lg-border-strong: #3d4964;
+
+  /* ── Text ────────────────────────────────────────────────────────── */
+  --lg-text-primary: #e6ebf4;
+  --lg-text-secondary: #9aa7bf;
+  --lg-text-tertiary: #6b7794;
+  --lg-text-on-accent: #10131c;
+
+  /* ── Accent ──────────────────────────────────────────────────────── */
+  --lg-accent: #4f8ff7;
+  --lg-accent-hover: #6fa3f9;
+  --lg-accent-subtle: rgba(79, 143, 247, 0.14);
+  --lg-accent-focus: #8ab4ff;
+
+  /* ── State colors (paired with shape + label redundancy) ──────────── */
+  /* normal: lightest of the three states — reads as "fine" in dark UI */
+  --lg-state-normal: #3fb950;
+  --lg-state-normal-text: #56d364;
+  --lg-state-normal-subtle: rgba(63, 185, 80, 0.15);
+  /* warning: mid lightness, amber family */
+  --lg-state-warning: #d29922;
+  --lg-state-warning-text: #e3b341;
+  --lg-state-warning-subtle: rgba(210, 153, 34, 0.16);
+  /* critical: most contrast, red family */
+  --lg-state-critical: #f85149;
+  --lg-state-critical-text: #ff7b72;
+  --lg-state-critical-subtle: rgba(248, 81, 73, 0.17);
+
+  /* ── Operating-mode indicator (C5: SIMULATED | UNCONFIGURED | LIVE) ── */
+  /* Purple: deliberately outside the normal/warning/critical hue family */
+  --lg-mode-simulated: #a371f7;
+  --lg-mode-simulated-subtle: rgba(163, 113, 247, 0.15);
+  /* Neutral gray: nothing configured yet */
+  --lg-mode-unconfigured: #8b949e;
+  --lg-mode-unconfigured-subtle: rgba(139, 148, 158, 0.14);
+  /* Uses the state-normal color with a "LIVE" label — never bare green */
+  --lg-mode-live: #3fb950;
+  --lg-mode-live-subtle: rgba(63, 185, 80, 0.15);
+
+  /* ── Typography scale ────────────────────────────────────────────── */
+  --lg-font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --lg-font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, "Cascadia Mono", monospace;
+
+  --lg-text-xs: 0.75rem; /* 12px  */
+  --lg-text-sm: 0.8125rem; /* 13px  */
+  --lg-text-md: 0.875rem; /* 14px  */
+  --lg-text-lg: 1rem; /* 16px  */
+  --lg-text-xl: 1.25rem; /* 20px  */
+  --lg-text-2xl: 1.5rem; /* 24px  */
+  --lg-text-3xl: 1.875rem; /* 30px  */
+
+  /* Line-heights follow each size 1:1.2–1.4 */
+  --lg-leading-tight: 1.2;
+  --lg-leading-normal: 1.35;
+  --lg-leading-relaxed: 1.55;
+
+  --lg-weight-regular: 400;
+  --lg-weight-medium: 500;
+  --lg-weight-semibold: 600;
+  --lg-weight-bold: 700;
+
+  /* ── Spacing scale (4px base) ────────────────────────────────────── */
+  --lg-space-1: 0.25rem;
+  --lg-space-2: 0.5rem;
+  --lg-space-3: 0.75rem;
+  --lg-space-4: 1rem;
+  --lg-space-5: 1.5rem;
+  --lg-space-6: 2rem;
+  --lg-space-7: 3rem;
+  --lg-space-8: 4rem;
+
+  /* ── Radii ───────────────────────────────────────────────────────── */
+  --lg-radius-sm: 4px;
+  --lg-radius-md: 8px;
+  --lg-radius-lg: 12px;
+  --lg-radius-full: 9999px;
+
+  /* ── Elevation ───────────────────────────────────────────────────── */
+  --lg-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --lg-elevation-2: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --lg-elevation-3: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* ── Z-index ladder ──────────────────────────────────────────────── */
+  --lg-z-base: 0;
+  --lg-z-raised: 10;
+  --lg-z-dropdown: 100;
+  --lg-z-modal: 1000;
+  --lg-z-toast: 1100;
+
+  /* ── Motion (durations only; motion rules live in DESIGN.md) ─────── */
+  --lg-duration-instant: 80ms;
+  --lg-duration-fast: 160ms;
+  --lg-duration-normal: 240ms;
+  --lg-duration-hold: 1200ms; /* hold-to-confirm press duration, Amd 2.1 */
+  --lg-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  --lg-sidebar-width: 240px;
+  --lg-topbar-height: 56px;
+  --lg-breakpoint-md: 768px;
+  --lg-breakpoint-lg: 1100px;
+}
+
+/* Accessibility baseline: suppressed motion overrides. Every transition and
+ * keyed animation must respect this; components must not use their own
+ * unreachable media queries instead of/deep on top of tokens. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lg-duration-instant: 1ms;
+    --lg-duration-fast: 1ms;
+    --lg-duration-normal: 1ms;
+    --lg-duration-hold: 1ms;
+  }
+}

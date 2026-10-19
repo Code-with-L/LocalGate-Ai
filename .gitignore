@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build output
+web/dist/
+
+# analysis databases / editor state
+.idea/
+.vscode/
+
+# environment
+.env
+.env.local
+
+# os
+Thumbs.db
+.DS_Store
+# build state
+tsconfig.tsbuildinfo
