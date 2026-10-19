@@ -1,6 +1,9 @@
 # LocalGate AI — OpenCode Build Plan
 
-**Status:** Source of truth. Rev 2. Replaces all prior ad-hoc task lists.
+**Status:** Source of truth. Rev 2.1. Replaces all prior ad-hoc task lists.
+
+**Amendment log:**
+- **Amd 2.1** (owner-approved): clarified C5 to an explicit operating-mode enum (`SIMULATED | UNCONFIGURED | LIVE`) with health/connectivity/configuration/safety as separate dimensions; refined the D5 hold-to-confirm requirement to show safety-device freshness and reject stale/unknown status; defined dependency-budget accounting (direct production deps count, transitive reported, budget must not force risky custom code). No D-decision replaced.
 
 Build a premium, local-first smart gate management platform. No physical hardware is available during initial development. Simulation is the default. Never represent simulated device state as real.
 
@@ -16,7 +19,7 @@ These bind every phase and every prompt issued to OpenCode. A phase that violate
 | C2 | Reproducible local setup | The project runs from the repository with documented commands (`install`, `dev`, `test`, `lint`). Model files and other large async assets may be staged separately, but the pipeline must define exactly how. |
 | C3 | Offline after staging | After dependencies and AI models are staged locally, the product must operate with the network cable unplugged except for LAN integrations. Offline is a *claim until proven* — no artifact may state it until Phase 6 verifies it with actual network-disabling tests. |
 | C4 | No invented compatibility | No file, prompt, changelog, or commit message may claim support for a specific gate operator, camera, or board that was not verified against real hardware or a documented interface specification. |
-| C5 | Never misrepresent state | All simulated data must be structurally impossible to confuse with live data: use a `Simulated*` prefix at the type level, an explicit `is_simulated`/`is_live` field at the API level, and a persistent visual indicator in the GUI. There is no third default state between simulated, unconfigured, and live. |
+| C5 | Never misrepresent state | Every adapter operates in exactly one explicit operating mode `SIMULATED \| UNCONFIGURED \| LIVE`, represented as a discriminated union (or equivalent invariant that makes contradictory combinations structurally impossible), with a persistent visual indicator in the GUI. Operating mode is one dimension only: health, connectivity, configuration validity, and safety-device status are separate modeled dimensions and must never be compressed into the mode enum — a LIVE adapter can be disconnected; a configured adapter can be unhealthy. |
 | C6 | Small reviewable changes | One phase, one review checkpoint, human sign-off before the next phase begins. |
 
 ---
@@ -32,7 +35,7 @@ In P0 OpenCode selects the stack, but not freely. It must produce `docs/DECISION
 - **Candidates considered** (minimum 3 per slot).
 - **Decision criteria, weighted**: local-first operation, type safety across frontend/backend, migration tooling maturity, testability without hardware, dependency count and maintenance risk, audit-able path, offline capability, packaging/distribution feasibility.
 - **Explicit rejection reasons** for each non-selected candidate.
-- **Dependency budget**: the backend may not exceed 40 production dependencies without an amendment entry to `DECISIONS.md`.
+- **Dependency budget**: the backend may not exceed 40 direct production dependencies without a reviewed amendment entry to `DECISIONS.md`. A *production dependency* is a direct runtime dependency declared for the deployed backend artifact; build/dev/test tooling is excluded from the budget but must be inventoried. Transitive dependencies do not count against the budget but must be reported and reviewed for risk. The budget is a governance limit, not an incentive: if staying under it would mean replacing a safe, maintained library with riskier custom code, take the dependency and record an amendment instead.
 
 Constraints: frontend and backend must share the type definitions (single language or official same-language binding). The database must run as one local process or file (SQLite/Postgres-local/LevelDB-class) — no external DB service. Real-time communication (dashboard live view) must work over LAN without a cloud broker.
 
@@ -100,7 +103,7 @@ This is the only place where the system takes irreversible physical action.
   - Anti-enumeration: PIN format declared (length, alphabet) but constant-time comparison, uniform error responses (same timing + response shape for "wrong PIN" vs "unknown PIN"), no per-PIN existence oracle.
   - Anti-replay: single-use PINs and multi-use PINs must not allow the same authorization window to be replayed after use; limits tracked with the same append-only audit trail ordering; timestamps are server-authoritative per D4.
 - **Append-only audit is not tamper-proof by itself.** It is a complete-observation record, not an integrity guarantee. The threat model must state this distinction explicitly: audit records prevent silent deletion/rewrite at the application layer, not against an attacker with filesystem or database-admin access. What is possible instead: hash-chaining (documented, optional), export-to-append-only-file (documented), and any "tamper-evident" claim must be individually justified against a named attacker model, never assumed.
-- Manual control via the dashboard: the operator must also be able to trigger open/close/halt directly, and that path uses the same single actuation path, is rate-limited, is logged, and is flagged in the audit record as `manual` rather than `automated`. For safety, open/close commands issued from the GUI must require a brief hold-to-confirm interaction whose confirmation panel shows which safety devices (photocell/safety edge) were live at the moment of dispatch.
+- Manual control via the dashboard: the operator must also be able to trigger open/close/halt directly, and that path uses the same single actuation path, is rate-limited, is logged, and is flagged in the audit record as `manual` rather than `automated`. For safety, open/close commands issued from the GUI must require a brief hold-to-confirm interaction. The confirmation panel must show each relevant safety device's **current status and its freshness** (`last_reported_at` against a configured staleness threshold); dispatch must be **rejected** while safety status is stale or unknown rather than implied-safe from an earlier reading. Hold-to-confirm is an additional human-factors safeguard, not a substitute for physical interlocks or the operator's own safety mechanisms, and it must not be applied to routine, non-actuating actions.
 
 ---
 
