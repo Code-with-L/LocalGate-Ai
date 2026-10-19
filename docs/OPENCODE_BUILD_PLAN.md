@@ -1,9 +1,10 @@
 # LocalGate AI — OpenCode Build Plan
 
-**Status:** Source of truth. Rev 2.1. Replaces all prior ad-hoc task lists.
+**Status:** Source of truth. Rev 2.2. Replaces all prior ad-hoc task lists.
 
 **Amendment log:**
 - **Amd 2.1** (owner-approved): clarified C5 to an explicit operating-mode enum (`SIMULATED | UNCONFIGURED | LIVE`) with health/connectivity/configuration/safety as separate dimensions; refined the D5 hold-to-confirm requirement to show safety-device freshness and reject stale/unknown status; defined dependency-budget accounting (direct production deps count, transitive reported, budget must not force risky custom code). No D-decision replaced.
+- **Amd 2.2** (owner-approved, P0 review 2026-10-19): rewrote D3 rule 3 to remove Gatehead's policy authority (see below). Original rule 3 wording, preserved for decision history: "No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead, and Gatehead alone decides whether to consult the access-control service before acting." The strict rule that all device traffic flows through Gatehead remains; only the dependency direction changes — policy and authorization live entirely in the Actuation Coordinator, which depends on both the access-control service and Gatehead, so Gatehead can never become a second policy authority or induce a circular dependency. Recorded with the F-02 finding resolution in `docs/DECISIONS.md`.
 
 Build a premium, local-first smart gate management platform. No physical hardware is available during initial development. Simulation is the default. Never represent simulated device state as real.
 
@@ -75,7 +76,7 @@ Rules:
 
 1. The simulator implements the *same* contracts; nothing in the app knows which implementation is primed.
 2. Hardware adapters may only be added after review of an explicit, verifiable interface specification. "It has a REST API" is not a specification.
-3. No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead, and Gatehead alone decides whether to consult the access-control service before acting.
+3. No screen, service, or route calls a raw device socket, HTTP endpoint, or serial port directly. Everything goes through Gatehead. *(Rewritten by Amd 2.2, owner-approved: Gatehead is a policy-free typed device layer — it exposes commands, telemetry, and adapter status and performs no authorization. The Actuation Coordinator owns the single controlled actuation workflow and depends on both the access-control service and Gatehead, so authorization always precedes Gatehead receiving a command. Original wording preserved in the amendment log above.)*
 4. **Actuation path — one, and only one**: `authenticate → authorize → validate request → check safety interlocks → record decision → issue command via the approved Gatehead adapter`. The order is: authenticate, authorize, validate, interlock-check, then **record decision**, then actuate. Recording happens *before* actuation, because a command that cannot be audited must not be issued. Snapshot/camera capture is a post-command evidence step, not a precondition — a failed snapshot must not silently cancel a safety-relevant command, and a successful snapshot must not bypass the audit step. This depends on storage semantics: where snapshots are stored (file, blob, event-attached) and whether the snapshot write is best-effort or blocking is decided in D1/D2 and pinned in `DOMAIN.md` — the default is: audit record accepts an optional `evidence_ref` that may be filled asynchronously, so actuation is never blocked by snapshot latency.
 5. Interfaces evolve additively (new fields, new methods) — a breaking change to a Gatehead contract requires an explicit amendment entry in `DECISIONS.md`.
 

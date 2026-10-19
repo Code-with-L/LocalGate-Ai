@@ -1,6 +1,6 @@
 # D1 Decision Matrix — LocalGate AI (P0)
 
-**Status:** Proposed for P0 review. No package installed, no lockfile generated.
+**Status:** Approved by project owner after P0 review (2026-10-19). No package installed, no lockfile generated at P0.
 
 Selection criteria and weights (same weights applied to every slot):
 
@@ -114,21 +114,40 @@ Frontend direct production: `react`, `react-dom`, `react-router-dom`, `recharts`
 | DEC-006 | Event/audit storage split (SQLite + filesystem media + JSONL export) | Selected | OpenCode, per matrix above |
 | DEC-007 | Real-time telemetry = SSE, commands stay on HTTP POST | Selected | OpenCode, per matrix above |
 | DEC-008 | Password hashing = node:crypto scrypt (documented params) | Proposed | Revisit in P4 |
-| DEC-009 | Session = HttpOnly cookie, same-origin | Proposed | Confirmt in P4 with CSRF design |
-| DEC-010 | ANPR runtime = delegate to Frigate; ONNX fallback provisional | Proposed | Revisit in P5 |
+| DEC-009 | Session = HttpOnly cookie, same-origin | **Approved with security conditions** (owner P0 review) | Implement in P4 per conditions below |
+| DEC-010 | ANPR runtime = delegate to Frigate; ONNX fallback provisional | **Approved (Frigate-first)** (owner P0 review) | Revisit in P5 per conditions below |
+
+## P0 review outcomes (owner, recorded verbatim in substance)
+
+The project owner reviewed `NEXT.md`, `DECISIONS.md`, `DOMAIN.md`, and `GATEHEAD.md` on 2026-10-19 and ruled:
+
+- **Q-01 / F-02 — Approved.** Gatehead exposes typed device commands, telemetry, and adapter status only, and must not independently authorize commands. The Actuation Coordinator owns the single controlled actuation workflow and depends on both the authorization service and Gatehead. This is recorded as plan amendment **Amd 2.2** (D3 rule 3 rewritten; original wording preserved in the amendment log).
+- **Q-02 / F-01 — Approved.** Canonical entity count = 13. `CameraStream` and `Detection` remain distinct entities with composition relationships to `Camera`; documentation grouping must not erase their identities or lifecycle requirements.
+- **F-04 — Approved** (unconditional; `docs/README.md` already created as the documentation index in P0).
+- **F-03 — Already resolved by Amd 2.1** (no further action; unchanged by this review).
+
+### DEC-009 security conditions (binding; implementation in P4, not P1)
+1. Session cookies remain same-origin, `HttpOnly`, with CSRF protection and appropriate `Secure` and `SameSite` settings.
+2. For authenticated access over the LAN, **HTTPS is required**, with a documented certificate-trust and enrollment approach.
+3. Plain HTTP is permitted only for loopback-only development — it must not be the default for LAN-facing authenticated sessions.
+
+### DEC-010 conditions (binding)
+1. Frigate-first ANPR integration is approved; standalone ONNX inference remains a **provisional fallback** pending model selection, benchmarking, and packaging tests (P5).
+2. Frigate being configured does **not** itself establish that ANPR is available or accurate; availability and accuracy are separate, evidence-backed claims.
+3. Neither DEC-009 nor DEC-010 may be implemented during P1.
 
 ## Contradiction findings carried into this document (required by P0 prompt §3)
 
-Recorded here; **each marked Proposed pending user review**; the plan was not edited to pre-resolve them.
+Recorded here; **statuses updated after owner review on 2026-10-19** (see "P0 review outcomes" above); the plan was not edited to pre-resolve them.
 
-### Finding F-01 — Entity count
-The plan does not itself state "10" (the count appeared in a chat-level summary), but the "Minimum required entities" list names **13** discrete entities when grouped names are counted separately (`Site; Gate; GateSession; Operator; VisitorCredential; PlateAuthorization; AccessDecision; Camera; CameraStream; Detection; SafetyDevice; Fault; AuditRecord`). **Proposed resolution:** canonical count = **13 entities**, with `CameraStream` and `Detection` formally modelled as composition children of `Camera` so the intuitive "12" summary remains honest. Impact: none on behavior; prevents template-codegen duplication. To be reflected in `DOMAIN.md` and, on approval, as an amendment note back into the plan.
+### Finding F-01 — Entity count: **Approved**
+The plan does not itself state "10" (the count appeared in a chat-level summary), but the "Minimum required entities" list names **13** discrete entities when grouped names are counted separately (`Site; Gate; GateSession; Operator; VisitorCredential; PlateAuthorization; AccessDecision; Camera; CameraStream; Detection; SafetyDevice; Fault; AuditRecord`). **Resolution (approved by owner):** canonical count = **13 entities**, with `CameraStream` and `Detection` formally modelled as composition children of `Camera` so the intuitive "12" summary remains honest. Impact: none on behavior; prevents template-codegen duplication. Reflected in `DOMAIN.md` and as an amendment note back into the plan.
 
-### Finding F-02 — Gatehead ↔ authorization dependency direction
-Plan D3 rule 3 says "Gatehead alone decides whether to consult the access-control service before acting." The D5 actuation sequence places authorization **before** Gatehead is asked to actuate. Both readings cannot hold — a policy-authority inside Gatehead duplicates the sequencing and invites a circular dependency (Gatehead → AccessControl, while the Actuation Coordinator must already depend on both). **Proposed resolution:** Gatehead is a *policy-free, typed device layer*: it exposes commands and telemetry, performs no authorization. All policy (credentials, roles, interlock checks, decision recording) lives in the **Actuation Coordinator** service, which depends on Gatehead and AccessControl. `GATEHEAD.md` codifies this; a wording amendment to D3 rule 3 is requested in the plan.
+### Finding F-02 — Gatehead ↔ authorization dependency direction: **Approved** (plan Amd 2.2)
+Plan D3 rule 3 says "Gatehead alone decides whether to consult the access-control service before acting." The D5 actuation sequence places authorization **before** Gatehead is asked to actuate. Both readings cannot hold — a policy-authority inside Gatehead duplicates the sequencing and invites a circular dependency (Gatehead → AccessControl, while the Actuation Coordinator must already depend on both). **Resolution (approved by owner):** Gatehead is a *policy-free, typed device layer*: it exposes commands and telemetry, performs no authorization. All policy (credentials, roles, interlock checks, decision recording) lives in the **Actuation Coordinator** service, which depends on Gatehead and AccessControl. `GATEHEAD.md` codifies this; D3 rule 3 was rewritten by plan amendment **Amd 2.2** with the original wording preserved in the plan's amendment log.
 
-### Finding F-03 — Simulation/live representation
-Plan rev 2 (original C5) suggested `is_simulated`/`is_live` booleans, which permit both-true and both-false. Amd 2.1 already replaced C5 with an explicit operating-mode enum `SIMULATED | UNCONFIGURED | LIVE` (discriminated union), with health/connectivity/configuration/safety separate. **No further amendment required**; `DOMAIN.md` codifies the type, and event-level `source` (`simulated | live | imported`) is kept separate from adapter *mode* — the mapping is defined, one-way, and frozen at write.
+### Finding F-03 — Simulation/live representation: **Already resolved (Amd 2.1)**
+Plan rev 2 (original C5) suggested `is_simulated`/`is_live` booleans, which permit both-true and both-false. Amd 2.1 already replaced C5 with an explicit operating-mode enum `SIMULATED | UNCONFIGURED | LIVE` (discriminated union), with health/connectivity/configuration/safety separate. **No further amendment required**; `DOMAIN.md` codifies the type, and event-level `source` (`simulated | live | imported`) is kept separate from adapter *mode* — the mapping is defined, one-way, and frozen at write. Unchanged by the 2026-10-19 review.
 
-### Finding F-04 — `docs/README.md` "empty index"
-An empty file cannot be a useful index as its plan role implies. **Proposed resolution:** `docs/README.md` is created in P0 **as the documentation index** (links to every authoritative document with a one-line description of its status), and the plan's word "Empty" is corrected to "Index" on approval.
+### Finding F-04 — `docs/README.md` "empty index": **Approved**
+An empty file cannot be a useful index as its plan role implies. **Resolution (approved by owner):** `docs/README.md` is created in P0 **as the documentation index** (links to every authoritative document with a one-line description of its status), and the plan's word "Empty" is corrected to "Index". Done in P0 (commit `12158db` and the index record in `docs/README.md`).
