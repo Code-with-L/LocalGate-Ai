@@ -19,6 +19,7 @@ import {
 import type { PlateAuthorizationInput } from "../domain/plate-authorization";
 import type { PlateDetectionRecord } from "../domain/detections";
 import {
+  SAFETY_CLOCK_SKEW_TOLERANCE_MS,
   createSafetyDevice,
   evaluateSafetyReport,
   recordSafetyReport,
@@ -629,6 +630,57 @@ describe("SafetyDevice", () => {
     if (!invalidThreshold.ok) {
       expect(invalidThreshold.error.kind).toBe("safety-threshold-invalid");
     }
+  });
+
+  it("treats a future-dated record beyond clock skew as unknown", () => {
+    const reportedAtMs = 100_000;
+    const created = createSafetyDevice(
+      safetyDeviceOf({ lastReportedAtUtc: utcIsoFromMs(reportedAtMs) }),
+    );
+    if (!created.ok) {
+      throw new Error("safety-device-creation-failed");
+    }
+
+    const withinSkew = evaluateSafetyReport(
+      created.value,
+      reportedAtMs - SAFETY_CLOCK_SKEW_TOLERANCE_MS,
+      60_000,
+    );
+    expect(withinSkew.ok).toBe(true);
+
+    const beyondSkew = evaluateSafetyReport(
+      created.value,
+      reportedAtMs - SAFETY_CLOCK_SKEW_TOLERANCE_MS - 1,
+      60_000,
+    );
+    expect(beyondSkew.ok).toBe(false);
+    if (!beyondSkew.ok) {
+      expect(beyondSkew.error.kind).toBe("safety-timestamp-future");
+    }
+  });
+
+  it("rejects recording a future-dated report beyond clock skew", () => {
+    const nowMs = 100_000;
+    const created = createSafetyDevice(safetyDeviceOf({ lastReportedAtUtc: utcIsoFromMs(nowMs) }));
+    if (!created.ok) {
+      throw new Error("safety-device-creation-failed");
+    }
+
+    const recorded = recordSafetyReport(
+      created.value,
+      {
+        state: "TRIGGERED",
+        reportedAtUtc: utcIsoFromMs(nowMs + SAFETY_CLOCK_SKEW_TOLERANCE_MS + 1),
+        source: "live",
+      },
+      nowMs,
+      60_000,
+    );
+    expect(recorded.ok).toBe(false);
+    if (!recorded.ok) {
+      expect(recorded.error.kind).toBe("safety-timestamp-future");
+    }
+    expect(created.value.reportedState).toBe("CLEAR");
   });
 
   it("records state changes and suppresses unchanged reports", () => {

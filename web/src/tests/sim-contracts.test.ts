@@ -179,6 +179,7 @@ describe("SimScenario adapter teardown contract", () => {
       const outcome = await pending;
       expect(outcome.kind).toBe("GRANTED");
       expect(outcome.kind === "GRANTED" ? outcome.ack : null).toBeNull();
+      expect(outcome.kind === "GRANTED" ? outcome.dispatch : null).toBe("UNREACHABLE");
       expect(system.faults.records.map((fault) => fault.kind)).toContain("OPERATOR_UNREACHABLE");
     } finally {
       system.dispose();

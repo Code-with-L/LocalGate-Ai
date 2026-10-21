@@ -1,13 +1,14 @@
 import type { AccessDecision, DecisionActorType, DecisionSubjectType } from "./decision";
 import { createAccessDecision } from "./decision";
 import type { DomainClock, DomainSubscription, Result, SafetyReportedState } from "./primitives";
-import { djb2Digest, msFromUtcIso, utcIsoFromMs } from "./primitives";
-import type { AuditAction, AuditStore } from "./audit";
+import { djb2Digest, err, msFromUtcIso, ok, utcIsoFromMs } from "./primitives";
+import type { AuditAction, AuditRecord, AuditStore } from "./audit";
 import { appendAuditRecord } from "./audit";
 import type { FaultLedger } from "./fault";
 import { createFaultRecord } from "./fault";
 import { evaluateGateTransition } from "./gate";
 import type { GateActuationState, GateCommandVerb, GateTransitionError } from "./gate";
+import { SAFETY_CLOCK_SKEW_TOLERANCE_MS } from "./safety-device";
 import type {
   GateOperatorAdapter,
   GateOperatorAck,
@@ -44,9 +45,19 @@ export interface GateCoordinatorDeps {
   operatorId: string;
 }
 
+export type DispatchStatus = "ACKED" | "UNREACHABLE" | "NOT_ATTEMPTED";
+
+export type CoordinatorRefusalReason = "audit_unavailable";
+
 export type CoordinatorOutcome =
   | { kind: "DENIED"; decision: AccessDecision }
-  | { kind: "GRANTED"; ack: GateOperatorAck | null; decision: AccessDecision };
+  | { kind: "REFUSED"; reason: CoordinatorRefusalReason }
+  | {
+      kind: "GRANTED";
+      dispatch: DispatchStatus;
+      ack: GateOperatorAck | null;
+      decision: AccessDecision;
+    };
 
 export interface PendingDispatch {
   readonly commandId: string;
@@ -94,7 +105,7 @@ export class GateCoordinator {
           this.raiseFault({
             kind: "SAFETY_TRIGGER",
             severity: this.projectedState === "CLOSING" ? "CRITICAL" : "WARN",
-            safetyDeviceId: this.safety?.device_type ?? null,
+            safetyDeviceId: null,
             correlationId: null,
           });
         }
@@ -195,21 +206,41 @@ export class GateCoordinator {
     }
     const decisionId = this.nextId("decision");
     const correlation = this.nextId("corr");
-    const auditIssued = this.appendAudit("OPEN_GATE_ISSUED", decisionId, correlation);
+    const auditIssued = this.appendAuditSafe("OPEN_GATE_ISSUED", decisionId, correlation);
+    if (!auditIssued.ok) {
+      this.raiseFault({
+        kind: "AUDIT_WRITE_FAILED",
+        severity: "CRITICAL",
+        safetyDeviceId: null,
+        correlationId: correlation,
+      });
+      return { kind: "REFUSED", reason: "audit_unavailable" };
+    }
+    const dispatchAtMs = this.clock.nowMs();
     const decision = this.createDecision(
       input,
       "GRANTED",
       null,
-      nowMs,
+      dispatchAtMs,
       decisionId,
       correlation,
-      auditIssued.ok ? auditIssued.value.auditId : "",
+      auditIssued.value.auditId,
     );
     this.decisions.push(decision);
+    const auditDispatch = this.appendAuditSafe("OPEN_GATE_DISPATCH", decisionId, correlation);
+    if (!auditDispatch.ok) {
+      this.raiseFault({
+        kind: "AUDIT_WRITE_FAILED",
+        severity: "CRITICAL",
+        safetyDeviceId: null,
+        correlationId: correlation,
+      });
+      return { kind: "GRANTED", dispatch: "NOT_ATTEMPTED", ack: null, decision };
+    }
+    const commandId = this.nextId("cmd");
+    this.pending = { commandId, verb, issuedAtMs: dispatchAtMs, decisionId };
     const sample = await this.readSample(verb);
     if (!sample.ok) {
-      const commandId = this.nextId("cmd");
-      this.pending = { commandId, verb, issuedAtMs: nowMs, decisionId };
       this.raiseFault({
         kind:
           sample.error.kind === "OPERATOR_UNREACHABLE"
@@ -219,12 +250,10 @@ export class GateCoordinator {
         safetyDeviceId: null,
         correlationId: commandId,
       });
-      return { kind: "GRANTED", ack: null, decision };
+      return { kind: "GRANTED", dispatch: "UNREACHABLE", ack: null, decision };
     }
-    const ack = sample.value;
     this.pending = null;
-    this.appendAudit("OPEN_GATE_DISPATCH", decisionId, correlation);
-    return { kind: "GRANTED", ack, decision };
+    return { kind: "GRANTED", dispatch: "ACKED", ack: sample.value, decision };
   }
 
   private async readSample(
@@ -250,7 +279,13 @@ export class GateCoordinator {
     }
     const reportedMs = msFromUtcIso(status.last_reported_at);
     const nowMs = this.clock.nowMs();
-    if (Number.isNaN(reportedMs) || nowMs - reportedMs >= this.config.stalenessThresholdMs) {
+    if (Number.isNaN(reportedMs)) {
+      return { ok: false, error: "safety_stale" };
+    }
+    if (reportedMs - nowMs > SAFETY_CLOCK_SKEW_TOLERANCE_MS) {
+      return { ok: false, error: "safety_unknown" };
+    }
+    if (nowMs - reportedMs >= this.config.stalenessThresholdMs) {
       return { ok: false, error: "safety_stale" };
     }
     if (status.oxidation.reported_state !== "CLEAR") {
@@ -284,7 +319,16 @@ export class GateCoordinator {
   ): CoordinatorOutcome {
     const decisionId = this.nextId("decision");
     const correlation = this.nextId("corr");
-    const audit = this.appendAudit("DECISION_RECORDED", decisionId, correlation);
+    const audit = this.appendAuditSafe("DECISION_RECORDED", decisionId, correlation);
+    if (!audit.ok) {
+      this.raiseFault({
+        kind: "AUDIT_WRITE_FAILED",
+        severity: "CRITICAL",
+        safetyDeviceId: null,
+        correlationId: null,
+      });
+      return { kind: "REFUSED", reason: "audit_unavailable" };
+    }
     const decision = this.createDecision(
       { ...input, actorType: input.actorType ?? actorType },
       "DENIED",
@@ -292,7 +336,7 @@ export class GateCoordinator {
       nowMs,
       decisionId,
       correlation,
-      audit.ok ? audit.value.auditId : "",
+      audit.value.auditId,
     );
     this.decisions.push(decision);
     return { kind: "DENIED", decision };
@@ -336,6 +380,22 @@ export class GateCoordinator {
       throw new Error(`decision-invalid:${created.error.kind}`);
     }
     return created.value;
+  }
+
+  private appendAuditSafe(
+    action: AuditAction,
+    decisionId: string,
+    correlation: string,
+  ): Result<AuditRecord, "audit_unavailable"> {
+    try {
+      const result = this.appendAudit(action, decisionId, correlation);
+      if (!result.ok || result.value.auditId.length === 0) {
+        return err("audit_unavailable");
+      }
+      return ok(result.value);
+    } catch {
+      return err("audit_unavailable");
+    }
   }
 
   private appendAudit(

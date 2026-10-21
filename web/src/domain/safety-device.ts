@@ -5,6 +5,8 @@ export type SafetyDeviceType = "PHOTOCELL" | "SAFETY_EDGE" | (string & {});
 
 export const KNOWN_SAFETY_DEVICE_TYPES: readonly SafetyDeviceType[] = ["PHOTOCELL", "SAFETY_EDGE"];
 
+export const SAFETY_CLOCK_SKEW_TOLERANCE_MS = 3000;
+
 export interface SafetyDevice {
   readonly entityId: string;
   readonly entityType: "SafetyDevice";
@@ -104,6 +106,7 @@ export type SafetyReportError =
   | { kind: "safety-record-stale"; lastReportedAtUtc: string | null; thresholdMs: number }
   | { kind: "safety-threshold-invalid"; thresholdMs: number }
   | { kind: "safety-timestamp-invalid"; reportedAtUtc: string }
+  | { kind: "safety-timestamp-future"; reportedAtUtc: string; skewToleranceMs: number }
   | { kind: "safety-timestamp-regression"; reportedAtUtc: string; lastReportedAtUtc: string }
   | { kind: "safety-mode-unconfigured"; deviceId: string };
 
@@ -125,6 +128,13 @@ export function evaluateSafetyReport(
   const lastMs = msFromUtcIso(last);
   if (Number.isNaN(lastMs)) {
     return err({ kind: "safety-timestamp-invalid", reportedAtUtc: last });
+  }
+  if (lastMs - nowMs > SAFETY_CLOCK_SKEW_TOLERANCE_MS) {
+    return err({
+      kind: "safety-timestamp-future",
+      reportedAtUtc: last,
+      skewToleranceMs: SAFETY_CLOCK_SKEW_TOLERANCE_MS,
+    });
   }
   if (nowMs - lastMs > thresholdMs) {
     return err({ kind: "safety-record-stale", lastReportedAtUtc: last, thresholdMs });
@@ -160,6 +170,13 @@ export function recordSafetyReport(
   const reportedMs = msFromUtcIso(input.reportedAtUtc);
   if (Number.isNaN(reportedMs)) {
     return err({ kind: "safety-timestamp-invalid", reportedAtUtc: input.reportedAtUtc });
+  }
+  if (reportedMs - nowMs > SAFETY_CLOCK_SKEW_TOLERANCE_MS) {
+    return err({
+      kind: "safety-timestamp-future",
+      reportedAtUtc: input.reportedAtUtc,
+      skewToleranceMs: SAFETY_CLOCK_SKEW_TOLERANCE_MS,
+    });
   }
   const last = current.lastReportedAtUtc;
   if (last !== null && reportedMs < msFromUtcIso(last)) {

@@ -1,6 +1,6 @@
 # NEXT — Handoff After P0
 
-**Status:** P0 review complete (owner ruled 2026-10-19). P0 decisions are recorded in `docs/DECISIONS.md` § "P0 review outcomes" and plan Amd 2.2 is applied in `docs/OPENCODE_BUILD_PLAN.md`. **P1 and P2 are authorized** under the permissions below; P2 is executed and recorded in `docs/scope-audit/P2.md`. This version supersedes the pre-review proposal.
+**Status:** P0 review complete (owner ruled 2026-10-19). P0 decisions are recorded in `docs/DECISIONS.md` § "P0 review outcomes" and plan Amd 2.2 is applied in `docs/OPENCODE_BUILD_PLAN.md`. **P1 and P2 are authorized** under the permissions below; P2 is executed and recorded in `docs/scope-audit/P2.md`. The P2 owner review produced nine findings; **Bucket A (A1–A5) corrections are implemented and self-verified, and P2 sign-off is pending the owner's re-review** (§6). This version supersedes the pre-review proposal.
 
 ---
 
@@ -99,3 +99,48 @@ P2 per the plan: **domain core + simulator** — the behavioral engine that P1's
 Forbidden in P2 (unchanged): no Gatehead adapter wiring (P3), no backend/network/persistence (P4), no real camera/ANPR (P5), no physical-hardware assumptions. Additions or changes to §5 above require an amendment like Amd 2.x. P2 execution stayed inside these bounds; the forbidden-scope search evidence is in `docs/scope-audit/P2.md` §5.
 
 Open items carried to P3: D-P2-1 (UI safety data-source swap deferred to P3), D-P2-2 (hand-rolled property checks instead of an external library), D-P2-3 (5 npm audit findings remain; all fixes are semver-major), D-P2-4 (enum casing canonicalized in code).
+
+---
+
+# NEXT, part 3 — P2 owner review and Bucket A correction (2026-10-21)
+
+## 6. Bucket A outcome (implemented, awaiting P2 sign-off)
+
+The P2 review raised nine findings. Findings 4–9 are accepted as carried work (§7); findings 1–3 and 6 are corrected here. Bucket A stayed inside the P2 scope: no Gatehead adapter wiring, no backend/network/persistence, no real hardware.
+
+**A1 — clock-skew upper bound (finding 1).** `SAFETY_CLOCK_SKEW_TOLERANCE_MS = 3000` is exported from `web/src/domain/safety-device.ts:8`. Both freshness paths now reject future-dated reports rather than treating them as fresh:
+
+- `evaluateSafetyReport()` returns the new typed error kind `{ kind: "safety-timestamp-future"; reportedAtUtc; skewToleranceMs }` when `lastMs - nowMs > SAFETY_CLOCK_SKEW_TOLERANCE_MS`. The check sits after the NaN guard and before the existing staleness comparison (`:129`), which remains strict `>`.
+- `recordSafetyReport()` applies the symmetric guard when `reportedMs - nowMs > SAFETY_CLOCK_SKEW_TOLERANCE_MS`, so a future-dated report cannot be stored.
+- `GateCoordinator.readSafety()` maps the condition to `safety_unknown` (never fresh, never throwing). Its stale comparison keeps `>=` (`stalenessThresholdMs` is inclusive there), which is intentionally different from `evaluateSafetyReport()`'s strict `>`; entity tests pin the `>` boundary (exactly tolerance is accepted, tolerance + 1 ms is `safety-timestamp-future`).
+
+**A2 — no implicit audit failure (finding 2).** A private `appendAuditSafe()` wraps `appendAudit()`: it converts either a returned `AuditError` or an empty `auditId` or a thrown store failure into `Result<AuditRecord, "audit_unavailable">`. The empty-string audit-id projection is gone from both the grant and the denial path.
+
+- Grant path: a failed `OPEN_GATE_ISSUED` write now raises a CRITICAL `AUDIT_WRITE_FAILED` fault and returns `{ kind: "REFUSED", reason: "audit_unavailable" }` **before** any decision record or command exists. `REFUSED` carries no decision, so `decision.ts` is unchanged.
+- Dispatch path: `OPEN_GATE_DISPATCH` is now written write-ahead. If that write fails, the already-committed decision stands (never silently removed) and the outcome is `GRANTED` with `dispatch: "NOT_ATTEMPTED"`, `ack: null`, and a CRITICAL `AUDIT_WRITE_FAILED` fault. Deliberate consequence: an `OPEN_GATE_DISPATCH` record can exist for a command that was never sent. Treat that action as "dispatch attempted" — the record is a crash-durable intent trail, not proof of transmission.
+- Denial path: a failed denial audit write returns `{ kind: "REFUSED", reason: "audit_unavailable" }` (not `DENIED`), with a CRITICAL `AUDIT_WRITE_FAILED` fault and `correlationId: null`, and writes no decision.
+
+**A3 — honest grant shape (finding 3).** `GRANTED` is extended to `{ kind: "GRANTED"; dispatch: "ACKED" | "UNREACHABLE" | "NOT_ATTEMPTED"; ack: GateOperatorAck | null; decision: AccessDecision }`.
+
+- `ACKED` — the adapter acknowledged; `ack` is populated.
+- `UNREACHABLE` — the adapter rejected or threw; `ack` is `null`, the pending dispatch is retained, and the existing `OPERATOR_UNREACHABLE`/`STATE_CLAIM_MISMATCH` fault is raised.
+- `NOT_ATTEMPTED` — authorized but deliberately not sent (currently only the write-ahead dispatch-audit failure above).
+- Ordering is unchanged: the decision is committed before actuation, so an actuation failure can never retract an authorization record.
+- `dispatchedAtServerUtc` is now the single `dispatchAtMs` sample that also stamps `pending.issuedAtMs`, so it is honest only when `dispatch === "ACKED"`; consumers must read `dispatch` rather than assume a command moment.
+- `dispatchTimeoutMs` is still configuration-only: the coordinator records it but performs no timeout enforcement.
+
+**A4 — safety attribution (finding 6).** `raiseFault()` now reports `safetyDeviceId: null` on every path. The simulator's `device_type` is never converted into a device identity; real identity registration is P3 work.
+
+**A5 — explicit invariant tests (finding 7).** `fast-check` stays deferred (D-P2-2). Added to `web/src/tests/coordinator.test.ts`: a future-dated safety denial (`reportSkewMs = -60_000` → `DENIED`/`safety_unknown`, no state change), an `UNREACHABLE` dispatch assertion on the disconnected operator, and three audit-failure cases (issue-write, dispatch-write, denial-write) driven by a new `failAuditAfter(system, allowedPushes)` helper that makes the simulated audit store throw past a chosen write. `web/src/tests/sim-contracts.test.ts` now also asserts `dispatch === "UNREACHABLE"`; `web/src/tests/entities.test.ts` pins the A1 boundary on both `evaluateSafetyReport()` and `recordSafetyReport()`. A5(b) needed no new test: `credential.test.ts` already asserts `ok === false` for expired, revoked, and exhausted credentials — that eligibility rule is simply not yet wired into the coordinator (B1).
+
+Also updated: `coordinator.ts` runtime imports/`DispatchStatus`/`CoordinatorRefusalReason`; existing `GRANTED` consumers in tests were narrowed to the new fields. Verified at handoff: `npx tsc --noEmit` clean, `npm run lint` clean, `npm run format:check` clean, `npm test` green apart from the pre-existing hold-to-confirm flake (C2), `npm run build` green.
+
+## 7. Carried corrective work (not in Bucket A)
+
+- **B1 (P4, finding 5):** credential eligibility lives outside coordinator authorization. Required order: lookup → status/validity/revocation/use-count → atomic consumption → decision → audit. The authorize callback must return a credential decision, not a bare boolean.
+- **B2 (P5, finding 4):** post-command evidence is not connected to decisions. Evidence starts `pending`, updates asynchronously through a defined path, and a snapshot failure must neither retract the decision nor bypass its audit record. P3 must not fake live evidence.
+- **B3 (P6):** persistence-backed audit. Until then the A2 guarantees are process-local; a crash between decision commit and audit flush can still lose the ledger tail.
+- **C1 (finding 9):** dependency remediation stays an isolated change (`vitest@5`, `react-router-dom@7` are semver-major) with a full regression run and a post-upgrade audit.
+- **C2 (finding 8):** the hold-to-confirm test in `web/src/tests/hold-and-badges.test.tsx` is timing-sensitive on real timers. Fix by fake timers with explicit advancement, or document a real-timer contract that the suite actually honors.
+
+P3 (Gatehead adapters + simulator UI wiring) remains blocked pending separate explicit owner authorization.

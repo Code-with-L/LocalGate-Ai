@@ -33,6 +33,18 @@ async function makeSystem(
   return system;
 }
 
+function failAuditAfter(system: ReturnType<typeof createSimulatedSystem>, allowedPushes: number) {
+  const original = system.audit.pushRecord.bind(system.audit);
+  let pushes = 0;
+  system.audit.pushRecord = (record) => {
+    pushes += 1;
+    if (pushes > allowedPushes) {
+      throw new Error("audit store unavailable");
+    }
+    original(record);
+  };
+}
+
 describe("GateCoordinator command flow", () => {
   it("grants OPEN with ack, decision evidence and both audit entries", async () => {
     const system = await makeSystem();
@@ -118,6 +130,18 @@ describe("GateCoordinator command flow", () => {
     expect(system.stateChanges).toHaveLength(0);
   });
 
+  it("denies OPEN when safety reports come from the future beyond clock skew", async () => {
+    const system = await makeSystem();
+    system.knobs.reportSkewMs = -60_000;
+    const outcome = await system.coordinator.request("OPEN", openRequest);
+    expect(outcome.kind).toBe("DENIED");
+    if (outcome.kind !== "DENIED") {
+      return;
+    }
+    expect(outcome.decision.deniedReason).toBe("safety_unknown");
+    expect(system.stateChanges).toHaveLength(0);
+  });
+
   it("denies a second OPEN while already OPENING (validation_failed)", async () => {
     const system = await makeSystem();
     const first = await system.coordinator.request("OPEN", openRequest);
@@ -153,6 +177,7 @@ describe("GateCoordinator operator delegation", () => {
       return;
     }
     expect(outcome.ack).toBeNull();
+    expect(outcome.dispatch).toBe("UNREACHABLE");
     expect(system.faults.records.some((fault) => fault.kind === "OPERATOR_UNREACHABLE")).toBe(true);
   });
 
@@ -188,6 +213,54 @@ describe("GateCoordinator audit decision linkage", () => {
       expect(decision.deniedReason).toBeNull();
       expect(auditIds.has(decision.auditRecordId)).toBe(true);
     }
+  });
+
+  it("refuses the grant when the issue audit write fails", async () => {
+    const system = await makeSystem();
+    failAuditAfter(system, 0);
+    const outcome = await system.coordinator.request("OPEN", openRequest);
+    expect(outcome.kind).toBe("REFUSED");
+    if (outcome.kind !== "REFUSED") {
+      return;
+    }
+    expect(outcome.reason).toBe("audit_unavailable");
+    expect(system.decisions).toHaveLength(0);
+    expect(system.stateChanges).toHaveLength(0);
+    expect(system.faults.records.some((fault) => fault.kind === "AUDIT_WRITE_FAILED")).toBe(true);
+  });
+
+  it("reports NOT_ATTEMPTED when the dispatch audit write fails", async () => {
+    const system = await makeSystem();
+    failAuditAfter(system, 1);
+    const outcome = await system.coordinator.request("OPEN", openRequest);
+    expect(outcome.kind).toBe("GRANTED");
+    if (outcome.kind !== "GRANTED") {
+      return;
+    }
+    expect(outcome.dispatch).toBe("NOT_ATTEMPTED");
+    expect(outcome.ack).toBeNull();
+    expect(system.stateChanges).toHaveLength(0);
+    const decisions = system.decisions;
+    expect(decisions).toHaveLength(1);
+    const auditIds = new Set(system.audit.records.map((record) => record.auditId));
+    for (const decision of decisions) {
+      expect(auditIds.has(decision.auditRecordId)).toBe(true);
+    }
+    expect(system.faults.records.some((fault) => fault.kind === "AUDIT_WRITE_FAILED")).toBe(true);
+  });
+
+  it("refuses a denial when the audit write fails", async () => {
+    const system = await makeSystem(() => ({ allowed: false }));
+    failAuditAfter(system, 0);
+    const outcome = await system.coordinator.request("OPEN", openRequest);
+    expect(outcome.kind).toBe("REFUSED");
+    if (outcome.kind !== "REFUSED") {
+      return;
+    }
+    expect(outcome.reason).toBe("audit_unavailable");
+    expect(system.decisions).toHaveLength(0);
+    expect(system.stateChanges).toHaveLength(0);
+    expect(system.faults.records.some((fault) => fault.kind === "AUDIT_WRITE_FAILED")).toBe(true);
   });
 });
 
