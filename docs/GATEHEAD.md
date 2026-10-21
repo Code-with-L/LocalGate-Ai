@@ -45,6 +45,7 @@ Rules (researchable, testable):
 - Contracts are named **`GATEHEAD/v1`** and are additive-evolution: new optional fields and new adapters may be added under `v1`; breaking changes open a new minor (`GATEHEAD/v2`) recorded as a `DECISIONS.md` amendment before implementation.
 - Each adapter record carries `adapter_contract_version` so state-migration or on-air failure can be attributed to a boundary revision.
 - Every adapter must ship its own **contract tests** (P2 for simulators, P5 for live provisioning pilots) and must run them against the versioned schemas.
+- **P2 implementation:** the versioned shapes live in `web/src/gatehead/contract.ts` (`GATEHEAD_CONTRACT_VERSION = "GATEHEAD/v1"`, `ANPR_INGEST_LIMIT = 32`). The simulator that consumes them is `web/src/simulator/` (a sibling of the contract, never a subtree of it), and its conformance tests are `web/src/tests/sim-contracts.test.ts`.
 
 ## 2. Adapter family: `GateOperator`
 
@@ -137,3 +138,5 @@ These are recorded as _exclusions_ so future refactors don't silently re-merge t
 | AnprProvider (mock)      | connect-failure is typed; ingest limits                                                |
 
 Live-contract tests get their own checklist in P5 and explicitly verify **freshness** behavior (not just status flags).
+
+The four SIMULATED/mock rows above are exercised in P2 by `web/src/tests/sim-contracts.test.ts`; the live rows stay unticked until P5.

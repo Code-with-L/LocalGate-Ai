@@ -1,6 +1,6 @@
 # NEXT — Handoff After P0
 
-**Status:** P0 review complete (owner ruled 2026-10-19). P0 decisions are recorded in `docs/DECISIONS.md` § "P0 review outcomes" and plan Amd 2.2 is applied in `docs/OPENCODE_BUILD_PLAN.md`. **P1 is authorized under the permissions below.** This version supersedes the pre-review proposal.
+**Status:** P0 review complete (owner ruled 2026-10-19). P0 decisions are recorded in `docs/DECISIONS.md` § "P0 review outcomes" and plan Amd 2.2 is applied in `docs/OPENCODE_BUILD_PLAN.md`. **P1 and P2 are authorized** under the permissions below; P2 is executed and recorded in `docs/scope-audit/P2.md`. This version supersedes the pre-review proposal.
 
 ---
 
@@ -84,9 +84,11 @@ Deviations and open items for the owner (details in the P1 audit §4/§7):
 - **D-P1-2:** 5 npm audit findings live in the dependency tree (2 critical — `tinypool` RCE gadget and `vitest` mocker path traversal — are dev/test-only, never shipped; 1 moderate in `react-router-dom` is a client-side open-redirect in a loopback-local app). `npm audit fix --force` was deliberately **not** run (breaking major updates). Remediation proposed at P2 toolchain refresh.
 - **D-P1-3:** Recharts exceeds the default 500 kB chunk warning; acceptable for LAN-served UI, `import()` code-split proposed as optional P2 polish.
 
-## 5. P2 handoff proposal (for owner review — not yet authorized)
+## 5. P2 handoff proposal (authorized — execution record in `docs/scope-audit/P2.md`)
 
-P2 per the plan: **domain core + simulator** — the behavioral engine that P1's UI will later talk to. Proposed permissions, mirroring the P1 model:
+**P2 authorized** by the project owner; the permissions below were exercised as written. Per-permission evidence, deviations (D-P2-1 … D-P2-4), and the full test/toolchain record live in `docs/scope-audit/P2.md`.
+
+P2 per the plan: **domain core + simulator** — the behavioral engine that P1's UI will later talk to. Permissions, mirroring the P1 model:
 
 1. **Domain core (`web/src/domain/`):** pure-TypeScript translation of `DOMAIN.md`'s 13 canonical entities — types, state machines (gate motion cycle, credential lifecycle, operator modes), invariants, and typed events. No React, no I/O, no time-fudging: time is injected.
 2. **Simulator engine (`web/src/simulator/`):** drives real instances of the domain core classes through generated timelines (visitors, decisions, telemetry). This is the first real logic replacing mock data — **mocks stay until the simulator UI land (P3)**, then get wired to the engine behind tested contracts. Simulated provenance labels remain everywhere: the simulator is honest simulation, never claimed real (C5/D3 unconditional).
@@ -94,4 +96,6 @@ P2 per the plan: **domain core + simulator** — the behavioral engine that P1's
 4. **Property-based tests** for state machines (gate never activates while safety obstructed; credentials never active outside their window; audit event for every decision) — complementing, not replacing, the vitest suite.
 5. **Toolchain refresh:** non-breaking patch/devDependency updates, incl. remediation attempt for the P1 audit findings (D-P1-2) without `--force`.
 
-Forbidden in P2 (unchanged): no Gatehead adapter wiring (P3), no backend/network/persistence (P4), no real camera/ANPR (P5), no physical-hardware assumptions. Additions or changes to §5 above require an amendment like Amd 2.x. Until the owner authorizes this proposal, P2 is blocked.
+Forbidden in P2 (unchanged): no Gatehead adapter wiring (P3), no backend/network/persistence (P4), no real camera/ANPR (P5), no physical-hardware assumptions. Additions or changes to §5 above require an amendment like Amd 2.x. P2 execution stayed inside these bounds; the forbidden-scope search evidence is in `docs/scope-audit/P2.md` §5.
+
+Open items carried to P3: D-P2-1 (UI safety data-source swap deferred to P3), D-P2-2 (hand-rolled property checks instead of an external library), D-P2-3 (5 npm audit findings remain; all fixes are semver-major), D-P2-4 (enum casing canonicalized in code).

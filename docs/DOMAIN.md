@@ -52,6 +52,8 @@ Mapping is one-way and recorded when the event is appended: an event emitted by 
 
 **Proposed:** treat `10` in any earlier ad-hoc summary as obsolete; `13` is canonical, with the grouped count of 11 if the two camera children are folded into their parent in a naive view. To be recorded as an amendment note in the plan on approval, and used verbatim by template-codegen in P2.
 
+> **P2 implementation note:** the 13 entities were hand-written (not generated) in `web/src/domain/` — `site.ts`, `gate.ts`, `session.ts`, `operator.ts`, `credential.ts`, `plate-authorization.ts`, `camera.ts` (Camera + CameraStream), `detections.ts`, `decision.ts`, `safety-device.ts`, `fault.ts`, `audit.ts` — sharing `primitives.ts` and `clock.ts`. Enum value casing is UPPER-CASE in code; the lowercase spellings in this document are display casing (see `docs/scope-audit/P2.md` §7, D-P2-4).
+
 ## 2. Entities
 
 Common conventions unless stated otherwise:
@@ -203,3 +205,5 @@ IDLE | OPENING | OPEN_AWAIT_CLOSE | CLOSING | HALTED_SAFETY_STOP
 | SafetyDevice       | P2                          | staleness rejection        | P2..P5     |
 | Fault              | P2                          | resolution semantik        | P2..P5     |
 | AuditRecord        | P2                          | append-only                | P2..P6     |
+
+P2 delivered the `P2` column for every entity: validated constructors, the gate motion cycle, credential/operator lifecycles, safety staleness rejection, the append-only audit/fault/decision ledgers, and the actuation coordinator that joins them. Items marked P4/P5 in this table (operator auth, plate authorization seeding from live ANPR, live camera streams) remain open — see `docs/scope-audit/P2.md` §4 for the carried uncertainties (D-P2-1..D-P2-4).
